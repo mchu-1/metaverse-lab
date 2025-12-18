@@ -151,10 +151,7 @@
         border: 0;
       }
 
-      /* Equipment Label Overlay */
-        white-space: nowrap;
-        border: 0;
-      }
+
     </style>
 
     <!-- Hidden Accessibility Layer for AI Agents -->
@@ -166,6 +163,10 @@
       <section id="env-equipment" aria-labelledby="equipment-title">
         <h2 id="equipment-title">Laboratory Equipment</h2>
         <div id="equipment-list"></div>
+      </section>
+      <section id="env-annotations" aria-labelledby="annotations-title">
+        <h2 id="annotations-title">Annotated Objects</h2>
+        <div id="annotations-list"></div>
       </section>
       <section id="env-legal" aria-labelledby="legal-title">
         <h2 id="legal-title">Legal & Compliance</h2>
@@ -199,6 +200,15 @@
             const legalData = parseCSV(legalText);
             renderTable(legalData, 'legal-list');
           }
+
+          // Load Annotations
+          const annRes = await fetch('annotations.csv');
+          if (annRes.ok) {
+            const annText = await annRes.text();
+            const annData = parseCSV(annText);
+            renderAnnotations(annData, 'annotations-list');
+          }
+
         } catch (e) {
           console.error("Failed to load metadata:", e);
         }
@@ -275,9 +285,37 @@
         container.appendChild(table);
       }
 
-        table.appendChild(thead);
-        table.appendChild(tbody);
-        container.appendChild(table);
+      function renderAnnotations(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container || !data || data.length === 0) return;
+
+        // Source image dimensions for normalization
+        const SOURCE_WIDTH = 1024;
+        const SOURCE_HEIGHT = 506;
+
+        const uList = document.createElement('ul');
+        
+        data.forEach(item => {
+          const x = parseFloat(item.x);
+          const y = parseFloat(item.y);
+          const w = parseFloat(item.width);
+          const h = parseFloat(item.height);
+          
+          if (isNaN(x) || isNaN(y)) return;
+
+          // Normalize to percentage
+          const top = (y / SOURCE_HEIGHT * 100).toFixed(2);
+          const left = (x / SOURCE_WIDTH * 100).toFixed(2);
+          const width = (w / SOURCE_WIDTH * 100).toFixed(2);
+          const height = (h / SOURCE_HEIGHT * 100).toFixed(2);
+
+          const li = document.createElement('li');
+          // Text description for AI agent
+          li.innerText = `${item.annotation}: located at position top=${top}%, left=${left}%, width=${width}%, height=${height}% of the equirectangular view.`;
+          uList.appendChild(li);
+        });
+
+        container.appendChild(uList);
       }
 
       // Initialize
