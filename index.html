@@ -123,28 +123,31 @@
       });
 
       async function connectAgent() {
-        let apiKey = localStorage.getItem('GEMINI_API_KEY');
+        let apiKey = null;
         
-        // Try to load from env.js (Local Dev)
-        if (!apiKey) {
-            try {
-                const env = await import('./env.js');
-                if (env.GEMINI_API_KEY) {
-                    apiKey = env.GEMINI_API_KEY;
-                    console.log("Loaded API Key from env.js");
-                }
-            } catch (e) {
-                // env.js might not exist in production
-                console.log("No env.js found, falling back to usage.");
+        // 1. Try to load from env.js (Environment Priority)
+        try {
+            const env = await import('./env.js');
+            if (env.GEMINI_API_KEY) {
+                apiKey = env.GEMINI_API_KEY;
+                console.log("Using API Key from env.js");
             }
+        } catch (e) {
+            console.log("env.js not found (Production or Missing).");
         }
 
+        // 2. Try LocalStorage (Fallback)
+        if (!apiKey) {
+            apiKey = localStorage.getItem('GEMINI_API_KEY');
+        }
+
+        // 3. Prompt (Last Resort)
         if (!apiKey) {
              apiKey = prompt("Enter Google Gemini API Key:");
         }
         
         if (!apiKey) return;
-        localStorage.setItem('GEMINI_API_KEY', apiKey);
+        localStorage.setItem('GEMINI_API_KEY', apiKey); // Cache it
 
         btnConnect.style.opacity = '0.5'; // Loading state
 

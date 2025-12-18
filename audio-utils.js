@@ -15,9 +15,9 @@ export class AudioRecorder {
 
   async start(onDataAvailable) {
     this.onDataAvailable = onDataAvailable;
-    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: this.targetSampleRate, // Try to ask system for 16k, but it might ignore
-    });
+    // Note: We don't force sampleRate in constructor here because strict browser support varies.
+    // Instead we accept whatever the system gives us (e.g. 48000Hz) and decimate manually.
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     if (this.audioContext.state === "suspended") {
       await this.audioContext.resume();
@@ -27,7 +27,8 @@ export class AudioRecorder {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: this.targetSampleRate,
+          // We can ask for 16k, but if the device doesn't support it, we get 48k.
+          // Better to handle resampling ourself to be safe.
         },
       });
     } catch (e) {
@@ -35,26 +36,63 @@ export class AudioRecorder {
       throw e;
     }
 
-    // Modern AudioWorklet is better, but ScriptProcessor is easier for single-file drop-in
-    // without external worklet files. We'll use ScriptProcessor for simplicity in this lab.
-    // 4096 buffer size gives ~250ms latency chunk, can go lower (2048 or 1024) for faster streaming
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-    const processor = this.audioContext.createScriptProcessor(2048, 1, 1);
-
+    const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+    
+    // Resampling state
+    const sourceRate = this.audioContext.sampleRate;
+    const targetRate = this.targetSampleRate; // 16000
+    // Simple decimation ratio (not perfect but likely 48000 -> 16000 = 3)
+    // We should do a basic accumulator.
+    
+    let bufferCache = []; 
+    
     processor.onaudioprocess = (e) => {
       if (!this.onDataAvailable) return;
 
       const inputData = e.inputBuffer.getChannelData(0);
+      
+      // Downsampling logic
+      if (sourceRate === targetRate) {
+          this.sendData(inputData);
+      } else {
+          // Naive decimation/resampling
+          // We need to compress inputData (length N) into outputData (length N * 16k/48k)
+          const ratio = sourceRate / targetRate;
+          const outputLength = Math.floor(inputData.length / ratio);
+          const downsampled = new Float32Array(outputLength);
+          
+          for (let i = 0; i < outputLength; i++) {
+              const offset = Math.floor(i * ratio);
+              // Basic averaging (box filter) for anti-aliasing (primitive)
+              // or just nearest neighbor (sample[offset]). 
+              // Averaging is safer for downsampling.
+              let sum = 0;
+              let count = 0;
+              // Average samples from [offset] to [next_offset]
+              const nextOffset = Math.floor((i + 1) * ratio);
+              for (let j = offset; j < nextOffset && j < inputData.length; j++) {
+                  sum += inputData[j];
+                  count++;
+              }
+              downsampled[i] = count > 0 ? sum / count : inputData[offset];
+          }
+          this.sendData(downsampled);
+      }
+    };
 
-      // If the context rate is different from target (16000), we actully should downsample.
-      // However, creating the context with 16000 usually forces the OS to resample for us if supported.
-      // If strict downsampling is needed, we'd add linear interpolation here.
-      // For this demo, assuming Context was created at 16k or close enough.
+    source.connect(processor);
+    processor.connect(this.audioContext.destination);
 
+    this.processor = processor;
+    this.source = source;
+  }
+  
+  sendData(float32Data) {
       // Convert float32 [-1, 1] to Int16
-      const pcm16 = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        let s = Math.max(-1, Math.min(1, inputData[i]));
+      const pcm16 = new Int16Array(float32Data.length);
+      for (let i = 0; i < float32Data.length; i++) {
+        let s = Math.max(-1, Math.min(1, float32Data[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
 
@@ -69,13 +107,6 @@ export class AudioRecorder {
       const base64 = btoa(binary);
 
       this.onDataAvailable(base64);
-    };
-
-    source.connect(processor);
-    processor.connect(this.audioContext.destination); // Needed for Chrome to run the processor
-
-    this.processor = processor;
-    this.source = source;
   }
 
   stop() {
