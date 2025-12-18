@@ -99,20 +99,26 @@
         const consoleDiv = document.getElementById('debug-console');
         const MAX_LOGS = 50;
         
+        function sendLog(level, args) {
+            try {
+                const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+                fetch('/log', { method: 'POST', body: `[${level}] ${msg}` }).catch(e => {});
+            } catch (e) {}
+        }
+        
         function uiLog(level, args) {
              const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+             
+             // 1. Update UI
              const line = document.createElement('div');
              line.className = `log-entry log-${level.toLowerCase()}`;
              line.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
              consoleDiv.appendChild(line);
-             
-             // Auto-scroll
              consoleDiv.scrollTop = consoleDiv.scrollHeight;
+             if (consoleDiv.children.length > MAX_LOGS) consoleDiv.removeChild(consoleDiv.firstChild);
              
-             // Prune
-             if (consoleDiv.children.length > MAX_LOGS) {
-                 consoleDiv.removeChild(consoleDiv.firstChild);
-             }
+             // 2. Send Remote (Best Effort)
+             sendLog(level, args);
         }
 
         const originalLog = console.log;
