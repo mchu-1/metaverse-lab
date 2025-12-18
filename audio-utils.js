@@ -105,8 +105,23 @@ export class AudioRecorder {
         binary += String.fromCharCode(bytes[i]);
       }
       const base64 = btoa(binary);
-
       this.onDataAvailable(base64);
+      
+      // Visual Debug: Calculate approximate volume
+      let sum = 0;
+      for (let i = 0; i < inputData.length; i += 10) { // Subsample for speed
+          sum += Math.abs(inputData[i]);
+      }
+      const avg = sum / (inputData.length / 10);
+      
+      // Log occasionally to prove mic is working
+      if (!this.frameCount) this.frameCount = 0;
+      this.frameCount++;
+      if (this.frameCount % 50 === 0) { // Every ~2 seconds
+         if (avg > 0.01) { 
+             console.log(`[MIC] Level: ${(avg*100).toFixed(1)}%`); 
+         }
+      }
   }
 
   stop() {

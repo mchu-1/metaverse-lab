@@ -66,6 +66,64 @@
       </button>
     </div>
 
+    <!-- Debug Console Overlay -->
+    <div id="debug-console"></div>
+
+    <style>
+      #debug-console {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 300px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.7);
+        color: #0f0;
+        font-family: monospace;
+        font-size: 10px;
+        padding: 5px;
+        pointer-events: none; /* Let touches pass through */
+        z-index: 9999;
+        display: block; /* Visible by default for this test */
+        border: 1px solid #333;
+      }
+      .log-entry { margin-bottom: 2px; border-bottom: 1px solid #222; }
+      .log-info { color: #88ff88; }
+      .log-warn { color: #ffff88; }
+      .log-error { color: #ff8888; }
+    </style>
+
+    <script>
+      // ON-SCREEN LOGGER
+      (function() {
+        const consoleDiv = document.getElementById('debug-console');
+        const MAX_LOGS = 50;
+        
+        function uiLog(level, args) {
+             const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+             const line = document.createElement('div');
+             line.className = `log-entry log-${level.toLowerCase()}`;
+             line.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
+             consoleDiv.appendChild(line);
+             
+             // Auto-scroll
+             consoleDiv.scrollTop = consoleDiv.scrollHeight;
+             
+             // Prune
+             if (consoleDiv.children.length > MAX_LOGS) {
+                 consoleDiv.removeChild(consoleDiv.firstChild);
+             }
+        }
+
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        console.log = function(...args) { originalLog.apply(console, args); uiLog('INFO', args); };
+        console.warn = function(...args) { originalWarn.apply(console, args); uiLog('WARN', args); };
+        console.error = function(...args) { originalError.apply(console, args); uiLog('ERROR', args); };
+      })();
+    </script>
     <script type="module">
       import { LiveClient } from './live-client.js';
       import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
