@@ -51,43 +51,59 @@
           <path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
         </svg>
       </button>
-      <!-- Custom VR Button -->
-      <button id="btn-vr" class="ui-btn" aria-label="Enter VR">
-        <svg viewBox="0 0 24 24" width="24" height="24">
-          <path fill="currentColor" d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-7 0c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm16 0c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+      
+      <!-- Connect Logic -->
+      <button id="btn-connect" class="ui-btn" aria-label="Connect to Agent">
+        <svg id="icon-mic-off" viewBox="0 0 24 24" width="24" height="24">
+            <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+         <svg id="icon-mic-on" viewBox="0 0 24 24" width="24" height="24" style="display:none; color: #4CAF50;">
+            <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            <circle cx="18" cy="5" r="3" fill="#4CAF50"/>
         </svg>
       </button>
     </div>
 
-    <script>
+    <script type="module">
+      import { LiveClient } from './live-client.js';
+      import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
+
       // UI Logic
       const btnFullscreen = document.getElementById('btn-fullscreen');
       const btnReset = document.getElementById('btn-reset');
-      const btnVr = document.getElementById('btn-vr');
+      const btnConnect = document.getElementById('btn-connect');
+      const iconMicOff = document.getElementById('icon-mic-off');
+      const iconMicOn = document.getElementById('icon-mic-on');
+      
       const scene = document.querySelector('a-scene');
       const cameraEntity = document.querySelector('[camera]');
 
-      // Fullscreen Toggle
+      // State
+      let isConnected = false;
+      let liveClient = null;
+      let audioRecorder = null;
+      let audioPlayer = null;
+      
+      // Data (exposed for the Gaze logic)
+      let annotations = [];
+      let lastLookedAt = null;
+      let lastAnnounceTime = 0;
+
+      // --- 1. Basic UI Handlers ---
+
       btnFullscreen.addEventListener('click', () => {
         if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen();
         } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          }
+          if (document.exitFullscreen) document.exitFullscreen();
         }
       });
 
-      // Reset View
       btnReset.addEventListener('click', () => {
-        // Reset camera rotation and position logic
-        // For A-Frame look-controls, we might need to reset the component's internal state or the entity's rotation.
-        // A simple way is to reset the rotation attribute, but look-controls overrides it.
-        // We can access the look-controls component to reset pitch/yaw.
-        
         if (cameraEntity) {
            cameraEntity.setAttribute('rotation', '0 0 0');
-           // If using look-controls, we often need to zero out its internal pitch/yaw objects
            const controls = cameraEntity.components['look-controls'];
            if (controls) {
              controls.pitchObject.rotation.x = 0;
@@ -96,14 +112,276 @@
         }
       });
 
-      // VR Toggle
-      btnVr.addEventListener('click', () => {
-        if (scene.is('vr-mode')) {
-          scene.exitVR();
+      // --- 2. Live Agent Logic ---
+
+      btnConnect.addEventListener('click', async () => {
+        if (isConnected) {
+            disconnectAgent();
         } else {
-          scene.enterVR();
+            await connectAgent();
         }
       });
+
+      async function connectAgent() {
+        let apiKey = localStorage.getItem('GEMINI_API_KEY');
+        
+        // Try to load from env.js (Local Dev)
+        if (!apiKey) {
+            try {
+                const env = await import('./env.js');
+                if (env.GEMINI_API_KEY) {
+                    apiKey = env.GEMINI_API_KEY;
+                    console.log("Loaded API Key from env.js");
+                }
+            } catch (e) {
+                // env.js might not exist in production
+                console.log("No env.js found, falling back to usage.");
+            }
+        }
+
+        if (!apiKey) {
+             apiKey = prompt("Enter Google Gemini API Key:");
+        }
+        
+        if (!apiKey) return;
+        localStorage.setItem('GEMINI_API_KEY', apiKey);
+
+        btnConnect.style.opacity = '0.5'; // Loading state
+
+        try {
+            liveClient = new LiveClient(apiKey);
+            audioRecorder = new AudioRecorder();
+            audioPlayer = new AudioStreamPlayer();
+
+            // 1. Initialize Audio Output
+            await audioPlayer.initialize();
+
+            // 2. Connect generic callback
+            liveClient.onAudio = (data) => {
+                audioPlayer.addPCM16(data);
+            };
+
+            liveClient.onClose = () => {
+                disconnectAgent();
+            };
+
+            // 3. Build System Instruction with Context
+            const reason = document.getElementById('reason-content').innerText;
+            const equip = document.getElementById('equipment-list').innerText;
+            const legal = document.getElementById('legal-list').innerText;
+            const annotations = document.getElementById('annotations-list').innerText;
+
+            // We construct a prompt that prepares the agent
+            const instructions = `
+You are an intelligent AI lab assistant in the 'Network Lab'. 
+You have access to the user's focus of attention via system messages I will send you.
+When I send "CONTEXT: User is looking at [Object Name]", you should be aware of it.
+If the object is interesting or the user dwells on it, you can offer a brief, interesting fact or description.
+Don't be too chatty. Be helpful, concise, and professional.
+
+Context Data:
+${reason}
+
+Equipment List:
+${equip}
+
+Legal Requirements:
+${legal}
+
+Known Annotations/Locations:
+${annotations}
+            `;
+
+            // 4. Connect WebSocket
+            await liveClient.connect(instructions);
+
+            // 5. Start Microphone
+            await audioRecorder.start((base64PCM) => {
+                liveClient.sendAudio(base64PCM);
+            });
+
+            // Success Updates
+            isConnected = true;
+            btnConnect.style.opacity = '1';
+            iconMicOff.style.display = 'none';
+            iconMicOn.style.display = 'block';
+            
+            // Start Gaze Loop
+            startGazeTracking();
+
+        } catch (e) {
+            console.error("Connection failed", e);
+            alert("Failed to connect: " + e.message);
+            disconnectAgent();
+        }
+      }
+
+      function disconnectAgent() {
+        isConnected = false;
+        if (liveClient) liveClient.disconnect();
+        if (audioRecorder) audioRecorder.stop();
+        
+        liveClient = null;
+        audioRecorder = null;
+        audioPlayer = null;
+
+        btnConnect.style.opacity = '1';
+        iconMicOff.style.display = 'block';
+        iconMicOn.style.display = 'none';
+        
+        stopGazeTracking();
+      }
+
+      // --- 3. Gaze Tracking Logic ---
+      
+      let gazeInterval = null;
+      let dwellTimer = null;
+      const DWELL_THRESHOLD = 1500; // 1.5s to trigger
+      const COOLDOWN = 20000; // 20s before mentioning same thing again
+      const history = {}; // { "Object": timestamp }
+
+      function startGazeTracking() {
+          if (gazeInterval) clearInterval(gazeInterval);
+          gazeInterval = setInterval(checkGaze, 200); // Check 5 times a second
+      }
+
+      function stopGazeTracking() {
+          if (gazeInterval) clearInterval(gazeInterval);
+          if (dwellTimer) clearTimeout(dwellTimer);
+          gazeInterval = null;
+      }
+
+      function checkGaze() {
+          if (!cameraEntity) return;
+          
+          const rotation = cameraEntity.object3D.rotation;
+          // Three.js rotation is in Radians. Order usually YXZ.
+          // A-Frame: Y is Yaw (Vertical Axis), X is Pitch (Horizontal axis)
+          
+          let theta = rotation.y; // Yaw
+          let phi = rotation.x;   // Pitch
+          
+          // Normalize Yaw to 0..2PI
+          // In A-Frame/Three, positive rotation is counter-clockwise usually.
+          // To map to equirectangular:
+          // u = 0.5 + atan2(z, x) / 2pi ... simpler approach using degrees helpers if available
+          // Let's use simple degree mapping based on experience with A-Frame Sky
+          
+          // Convert to degrees
+          const rad2deg = 180 / Math.PI;
+          let yawDeg = (theta * rad2deg) % 360;
+          let pitchDeg = (phi * rad2deg);
+          
+          // Normalize to [0, 360)
+          if (yawDeg < 0) yawDeg += 360;
+          
+          // Map to Percentage (0..100)
+          // Note: The sky texture is rotated "rotation='0 -130 0'". 
+          // We need to account for this offset.
+          // The CSS/Canvas coordinate system usually starts Top-Left.
+          // A-Frame yaw 0 is usually -Z.
+          
+          // We'll use a simplified heuristic that matches the existing annotation system 
+          // (which likely uses a simple grid).
+          // We just need to tune the Offset. The image is rotated -130 deg.
+          
+          // Invert yaw because dragging left moves camera positive rot but texture moves right?
+          // Let's try standard mapping:
+          // U = (Yaw + Offset) / 360
+          // V = (Pitch + 90) / 180
+          
+          // Tweaked for 'rotation="0 -130 0"'
+          let u = ((360 - yawDeg) - 130) % 360; 
+          if (u < 0) u += 360;
+          u = u / 360;
+
+          // Pitch: Up is positive in older A-Frame? No, usually Looking Up is Positive X in local, 
+          // but verify A-Frame camera. look-controls usually: Pitch down = negative X?
+          // Actually, simply:
+          // -90 (down) to +90 (up) -> 0 (top) to 1 (bottom) in UV?
+          // Typically texture V=0 is bottom, V=1 is top in GL, but HTML Canvas 0 is top.
+          // Let's assume annotations.csv Y uses "Top is 0%" (HTML style).
+          // Then Pitch +90 -> 0 is Bottom? 
+          
+          // Let's rely on Normalized Coords derived from the csv:
+          // The CSV likely has X/Y in pixels relative to 1024x506.
+          
+          let v = 0.5 - (Math.max(-90, Math.min(90, pitchDeg)) / 180); 
+          // if pitch is 0 (horizon), v is 0.5.
+          // if pitch is 90 (up), item is at top? Wait. 
+          // If I look up, I see the sky (Top of image).
+          // If standard texture mapping: V=1 is Top.
+          // If CSV uses HTML coords: Y=0 is Top.
+          // So if Look Up (+90), we want Y=0.
+          // v = 0.5 - (90/180) = 0 -> Correct.
+          
+          const hit = findAnnotation(u, v);
+          
+          if (hit) {
+              handleObjectInView(hit);
+          } else {
+             // Lost focus
+             lastLookedAt = null;
+             if (dwellTimer) {
+                 clearTimeout(dwellTimer);
+                 dwellTimer = null;
+             }
+          }
+      }
+
+      function findAnnotation(u, v) {
+          // u, v are 0..1
+          // annotations is global populated below
+          if (!window.labAnnotations) return null;
+          
+          // x, y, width, height in CSV are pixels relative to 1024x506
+          const W = 1024;
+          const H = 506;
+          
+          for (const item of window.labAnnotations) {
+              const annX = parseFloat(item.x) / W;
+              const annY = parseFloat(item.y) / H;
+              const annW = parseFloat(item.width) / W;
+              const annH = parseFloat(item.height) / H;
+              
+              if (u >= annX && u <= annX + annW &&
+                  v >= annY && v <= annY + annH) {
+                  return item.annotation;
+              }
+          }
+          return null;
+      }
+      
+      function handleObjectInView(objectName) {
+          if (lastLookedAt === objectName) return; // Already tracking this dwell
+          
+          lastLookedAt = objectName;
+          
+          // Reset Dwell
+          if (dwellTimer) clearTimeout(dwellTimer);
+          
+          // Start Dwell
+          dwellTimer = setTimeout(() => {
+              triggerContextUpdate(objectName);
+          }, DWELL_THRESHOLD);
+      }
+      
+      function triggerContextUpdate(objectName) {
+          const now = Date.now();
+          // Cooldown check
+          if (history[objectName] && (now - history[objectName] < COOLDOWN)) {
+              return; // Too soon
+          }
+          
+          console.log("Triggering Context:", objectName);
+          history[objectName] = now;
+          
+          // Send to Gemini
+          if (isConnected && liveClient) {
+              liveClient.sendTextContext(`CONTEXT: User is looking at object: "${objectName}".`);
+          }
+      }
+
     </script>
     <style>
       #ui-controls {
@@ -175,6 +453,10 @@
     </div>
 
     <script>
+      // Source resolution
+      const SOURCE_WIDTH = 1024;
+      const SOURCE_HEIGHT = 506; 
+
       // Load and inject metadata
       async function loadMetadata() {
         try {
@@ -207,6 +489,7 @@
             const annText = await annRes.text();
             const annData = parseCSV(annText);
             renderAnnotations(annData, 'annotations-list');
+            window.labAnnotations = annData; // Expose for Gaze Tracker
           }
 
         } catch (e) {
@@ -215,7 +498,7 @@
       }
 
       function parseCSV(text) {
-        // Simple CSV parser handling quotes
+          // ... (existing helper) ...
         const lines = text.trim().split('\n');
         if (lines.length < 2) return []; // Access headers safely
         const headers = parseLine(lines[0]);
@@ -228,8 +511,9 @@
           }, {});
         });
       }
-
-      function parseLine(line) {
+      
+      // ... (parseLine helper) ...
+       function parseLine(line) {
         const result = [];
         let current = '';
         let inQuotes = false;
@@ -248,7 +532,8 @@
         result.push(current.trim());
         return result;
       }
-
+      
+      // ... (renderTable helper) ...
       function renderTable(data, containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -289,10 +574,6 @@
         const container = document.getElementById(containerId);
         if (!container || !data || data.length === 0) return;
 
-        // Source image dimensions for normalization
-        const SOURCE_WIDTH = 1024;
-        const SOURCE_HEIGHT = 506;
-
         const uList = document.createElement('ul');
         
         data.forEach(item => {
@@ -303,7 +584,7 @@
           
           if (isNaN(x) || isNaN(y)) return;
 
-          // Normalize to percentage
+          // Normalize to percentage for description
           const top = (y / SOURCE_HEIGHT * 100).toFixed(2);
           const left = (x / SOURCE_WIDTH * 100).toFixed(2);
           const width = (w / SOURCE_WIDTH * 100).toFixed(2);
@@ -311,7 +592,7 @@
 
           const li = document.createElement('li');
           // Text description for AI agent
-          li.innerText = `${item.annotation}: located at position top=${top}%, left=${left}%, width=${width}%, height=${height}% of the equirectangular view.`;
+          li.innerText = `${item.annotation}: located at position top=${top}%, left=${left}%, width=${width}%, height=${height}% of the source view.`;
           uList.appendChild(li);
         });
 
