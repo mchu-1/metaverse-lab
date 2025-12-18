@@ -24,7 +24,7 @@
       vr-mode-ui="enabled: true" enables the VR button.
       device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
     -->
-    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true">
+    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" renderer="colorManagement: true; preserveDrawingBuffer: true;">
       <a-assets>
         <img id="sky" src="nslab-world.png" />
       </a-assets>
@@ -67,37 +67,14 @@
     </div>
 
     <!-- Debug Console Overlay -->
-    <div id="debug-console"></div>
 
-    <style>
-      #debug-console {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        width: 300px;
-        max-height: 200px;
-        overflow-y: auto;
-        background: rgba(0, 0, 0, 0.7);
-        color: #0f0;
-        font-family: monospace;
-        font-size: 10px;
-        padding: 5px;
-        pointer-events: none; /* Let touches pass through */
-        z-index: 9999;
-        display: block; /* Visible by default for this test */
-        border: 1px solid #333;
-      }
-      .log-entry { margin-bottom: 2px; border-bottom: 1px solid #222; }
-      .log-info { color: #88ff88; }
-      .log-warn { color: #ffff88; }
-      .log-error { color: #ff8888; }
-    </style>
+
+
 
     <script>
-      // ON-SCREEN LOGGER
+      // REMOTE LOGGER (UI Removed)
       (function() {
-        const consoleDiv = document.getElementById('debug-console');
-        const MAX_LOGS = 50;
+        // No visual console
         
         function sendLog(level, args) {
             try {
@@ -107,15 +84,7 @@
         }
         
         function uiLog(level, args) {
-             const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-             
-             // 1. Update UI
-             const line = document.createElement('div');
-             line.className = `log-entry log-${level.toLowerCase()}`;
-             line.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
-             consoleDiv.appendChild(line);
-             consoleDiv.scrollTop = consoleDiv.scrollHeight;
-             if (consoleDiv.children.length > MAX_LOGS) consoleDiv.removeChild(consoleDiv.firstChild);
+             // 1. UI Update Removed
              
              // 2. Send Remote (Best Effort)
              sendLog(level, args);
@@ -156,7 +125,96 @@
       let lastLookedAt = null;
       let lastAnnounceTime = 0;
 
+      // EXPOSE FOR DEBUGGING
+      window.labTest = {
+          getLiveClient: () => liveClient,
+          startSpeechLogger: () => startSpeechLogger(),
+          stopSpeechLogger: () => stopSpeechLogger(),
+          setLiveClient: (client) => { liveClient = client; },
+          setIsConnected: (val) => { isConnected = val; }
+      };
+
       // --- 1. Basic UI Handlers ---
+
+      // Global Control Interface for AI Agent
+      // Global Control Interface for AI Agent
+      window.labControl = {
+          animationRef: null,
+          
+          reset: () => {
+             window.labControl.cancelAnimation();
+             if (cameraEntity) {
+               cameraEntity.setAttribute('rotation', '0 0 0');
+               const controls = cameraEntity.components['look-controls'];
+               if (controls) {
+                 controls.pitchObject.rotation.x = 0;
+                 controls.yawObject.rotation.y = 0;
+               }
+             }
+          },
+
+          cancelAnimation: () => {
+              if (window.labControl.animationRef) {
+                  cancelAnimationFrame(window.labControl.animationRef);
+                  window.labControl.animationRef = null;
+              }
+          },
+          
+          setRotation: (targetYawDeg, targetPitchDeg, duration = 1500) => {
+             window.labControl.cancelAnimation();
+             
+             if (!cameraEntity) return;
+
+             // A-Frame Look Controls overrides rotation directly
+             const controls = cameraEntity.components['look-controls'];
+             if (!controls) {
+                 // Fallback if no controls
+                 cameraEntity.setAttribute('rotation', `${targetPitchDeg} ${targetYawDeg} 0`);
+                 return;
+             }
+
+             // current rotations in radians
+             const startYawRad = controls.yawObject.rotation.y;
+             const startPitchRad = controls.pitchObject.rotation.x;
+             
+             const startYawDeg = THREE.MathUtils.radToDeg(startYawRad);
+             const startPitchDeg = THREE.MathUtils.radToDeg(startPitchRad);
+
+             // Calculate shortest path for Yaw
+             let deltaYaw = (targetYawDeg - startYawDeg) % 360;
+             if (deltaYaw > 180) deltaYaw -= 360;
+             if (deltaYaw < -180) deltaYaw += 360;
+             
+             const endYawRad = THREE.MathUtils.degToRad(startYawDeg + deltaYaw);
+             const endPitchRad = THREE.MathUtils.degToRad(targetPitchDeg);
+
+             const startTime = performance.now();
+             
+             function animate(time) {
+                 const elapsed = time - startTime;
+                 const progress = Math.min(elapsed / duration, 1.0);
+                 
+                 // Ease In Out Cubic
+                 const ease = progress < 0.5 
+                    ? 4 * progress * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+                 const currentYaw = startYawRad + (endYawRad - startYawRad) * ease;
+                 const currentPitch = startPitchRad + (endPitchRad - startPitchRad) * ease;
+
+                 controls.yawObject.rotation.y = currentYaw;
+                 controls.pitchObject.rotation.x = currentPitch;
+
+                 if (progress < 1.0) {
+                     window.labControl.animationRef = requestAnimationFrame(animate);
+                 } else {
+                     window.labControl.animationRef = null;
+                 }
+             }
+             
+             window.labControl.animationRef = requestAnimationFrame(animate);
+          }
+      };
 
       btnFullscreen.addEventListener('click', () => {
         if (!document.fullscreenElement) {
@@ -167,14 +225,7 @@
       });
 
       btnReset.addEventListener('click', () => {
-        if (cameraEntity) {
-           cameraEntity.setAttribute('rotation', '0 0 0');
-           const controls = cameraEntity.components['look-controls'];
-           if (controls) {
-             controls.pitchObject.rotation.x = 0;
-             controls.yawObject.rotation.y = 0;
-           }
-        }
+         window.labControl.reset();
       });
 
       // --- 2. Live Agent Logic ---
@@ -190,34 +241,46 @@
       async function connectAgent() {
         let apiKey = null;
         
-        // 1. Try to load from env.js (Environment Priority)
-        try {
-            const env = await import('./env.js');
-            if (env.GEMINI_API_KEY) {
-                apiKey = env.GEMINI_API_KEY;
-                console.log("Using API Key from env.js");
+            // 1. Fetch Ephemeral Token from Backend
+            try {
+                const tokenRes = await fetch('/token');
+                if (!tokenRes.ok) throw new Error("Failed to fetch ephemeral token");
+                const tokenData = await tokenRes.json();
+                apiKey = tokenData.token;
+                console.log("Using Ephemeral Token");
+            } catch (e) {
+                console.error("Token fetch failed, falling back to cached/prompt:", e);
             }
-        } catch (e) {
-            console.log("env.js not found (Production or Missing).");
-        }
 
-        // 2. Try LocalStorage (Fallback)
-        if (!apiKey) {
-            apiKey = localStorage.getItem('GEMINI_API_KEY');
-        }
+            // 2. Fallback: Try LocalStorage / Prompt if token fetch failed (or if you want to keep legacy support)
+            if (!apiKey) {
+                const stored = localStorage.getItem('GEMINI_API_KEY');
+                if (stored && typeof stored === 'string' && stored.trim().length > 0) {
+                    apiKey = stored.trim();
+                }
+            }
 
-        // 3. Prompt (Last Resort)
-        if (!apiKey) {
-             apiKey = prompt("Enter Google Gemini API Key:");
-        }
-        
-        if (!apiKey) return;
-        localStorage.setItem('GEMINI_API_KEY', apiKey); // Cache it
+            if (!apiKey) {
+                 const input = prompt("Enter Google Gemini API Key (or ensure server is running):");
+                 if (input && input.trim().length > 0) {
+                    apiKey = input.trim();
+                 }
+            }
+            
+            if (!apiKey) return;
+            // Note: We don't cache ephemeral tokens in localStorage as they expire
+            if (!apiKey.startsWith('AIza')) { 
+                 // It's likely an ephemeral token or we just rely on it. 
+                 // If it was a real key entered manually, we might want to cache it.
+                 // For now, let's only cache if it looks like a standard key (optional)
+            } else {
+                 localStorage.setItem('GEMINI_API_KEY', apiKey);
+            }
 
-        btnConnect.style.opacity = '0.5'; // Loading state
+            btnConnect.style.opacity = '0.5'; // Loading state
 
-        try {
-            liveClient = new LiveClient(apiKey);
+            try {
+                liveClient = new LiveClient(apiKey);
             audioRecorder = new AudioRecorder();
             audioPlayer = new AudioStreamPlayer();
 
@@ -248,6 +311,7 @@
             const instructions = `
 You are an intelligent AI lab assistant in the 'Network Lab'. 
 You have access to the user's focus of attention via system messages I will send you.
+You can also use the get_visual_context tool to take a photo of what the user is seeing and get a description. Use this when the user asks "What do I see?" or "Describe this".
 When I send "CONTEXT: User is looking at [Object Name]", you should be aware of it.
 If the object is interesting or the user dwells on it, you can offer a brief, interesting fact or description.
 Don't be too chatty. Be helpful, concise, and professional.
@@ -331,6 +395,12 @@ ${annotations}
                const transcript = event.results[event.results.length - 1][0].transcript;
                if (transcript.trim()) {
                  console.log("[USER]", transcript);
+                 
+                 // Forward to Agent as Context
+                 // REMOVED: Redundant with Audio Streaming (Speech-to-Speech)
+                 // if (isConnected && liveClient) {
+                 //     liveClient.sendTextContext(`CONTEXT: User said: "${transcript}"`);
+                 // }
                }
             }
         };
@@ -357,156 +427,108 @@ ${annotations}
         }
       }
 
-      // --- 3. Gaze Tracking Logic ---
+      // --- 3. Gaze Tracking Logic (Enhanced for FOV) ---
       
       let gazeInterval = null;
-      let dwellTimer = null;
-      const DWELL_THRESHOLD = 1500; // 1.5s to trigger
-      const COOLDOWN = 20000; // 20s before mentioning same thing again
-      const history = {}; // { "Object": timestamp }
+      let lastVisibleObjects = ""; // String signature of confirmed visible objects
+      
+      // Dwell Logic
+      let candidateVisible = "";
+      let candidateStartTime = 0;
+      const DWELL_MS = 2000; // 2 seconds dwell required
+
+      // FOV Configuration
+      const FOV_H_DEG = 80; 
+      const FOV_V_DEG = 60;
 
       function startGazeTracking() {
           if (gazeInterval) clearInterval(gazeInterval);
-          gazeInterval = setInterval(checkGaze, 200); // Check 5 times a second
+          gazeInterval = setInterval(checkView, 500); // Check every 500ms for better responsiveness
       }
 
       function stopGazeTracking() {
           if (gazeInterval) clearInterval(gazeInterval);
-          if (dwellTimer) clearTimeout(dwellTimer);
           gazeInterval = null;
       }
 
-      function checkGaze() {
-          if (!cameraEntity) return;
+      function checkView() {
+          if (!cameraEntity || !window.labAnnotations) return;
           
           const rotation = cameraEntity.object3D.rotation;
-          // Three.js rotation is in Radians. Order usually YXZ.
-          // A-Frame: Y is Yaw (Vertical Axis), X is Pitch (Horizontal axis)
-          
           let theta = rotation.y; // Yaw
           let phi = rotation.x;   // Pitch
           
-          // Normalize Yaw to 0..2PI
-          // In A-Frame/Three, positive rotation is counter-clockwise usually.
-          // To map to equirectangular:
-          // u = 0.5 + atan2(z, x) / 2pi ... simpler approach using degrees helpers if available
-          // Let's use simple degree mapping based on experience with A-Frame Sky
-          
-          // Convert to degrees
           const rad2deg = 180 / Math.PI;
           let yawDeg = (theta * rad2deg) % 360;
           let pitchDeg = (phi * rad2deg);
           
-          // Normalize to [0, 360)
           if (yawDeg < 0) yawDeg += 360;
           
-          // Map to Percentage (0..100)
-          // Note: The sky texture is rotated "rotation='0 -130 0'". 
-          // We need to account for this offset.
-          // The CSS/Canvas coordinate system usually starts Top-Left.
-          // A-Frame yaw 0 is usually -Z.
+          // Current Center UV (Similar to before)
+          // Adjust for rotation '0 -130 0'
+          let centerU = ((360 - yawDeg) - 130) % 360; 
+          if (centerU < 0) centerU += 360;
+          centerU = centerU / 360;
           
-          // We'll use a simplified heuristic that matches the existing annotation system 
-          // (which likely uses a simple grid).
-          // We just need to tune the Offset. The image is rotated -130 deg.
+          let centerV = 0.5 - (Math.max(-90, Math.min(90, pitchDeg)) / 180);
           
-          // Invert yaw because dragging left moves camera positive rot but texture moves right?
-          // Let's try standard mapping:
-          // U = (Yaw + Offset) / 360
-          // V = (Pitch + 90) / 180
+          // Calculate Visible Annotations
+          // We'll define a simple box in UV space around centerU, centerV
+          // Note: This wraps around U (0-1).
+          const halfH = (FOV_H_DEG / 2) / 360; 
+          const halfV = (FOV_V_DEG / 2) / 180;
           
-          // Tweaked for 'rotation="0 -130 0"'
-          let u = ((360 - yawDeg) - 130) % 360; 
-          if (u < 0) u += 360;
-          u = u / 360;
-
-          // Pitch: Up is positive in older A-Frame? No, usually Looking Up is Positive X in local, 
-          // but verify A-Frame camera. look-controls usually: Pitch down = negative X?
-          // Actually, simply:
-          // -90 (down) to +90 (up) -> 0 (top) to 1 (bottom) in UV?
-          // Typically texture V=0 is bottom, V=1 is top in GL, but HTML Canvas 0 is top.
-          // Let's assume annotations.csv Y uses "Top is 0%" (HTML style).
-          // Then Pitch +90 -> 0 is Bottom? 
-          
-          // Let's rely on Normalized Coords derived from the csv:
-          // The CSV likely has X/Y in pixels relative to 1024x506.
-          
-          let v = 0.5 - (Math.max(-90, Math.min(90, pitchDeg)) / 180); 
-          // if pitch is 0 (horizon), v is 0.5.
-          // if pitch is 90 (up), item is at top? Wait. 
-          // If I look up, I see the sky (Top of image).
-          // If standard texture mapping: V=1 is Top.
-          // If CSV uses HTML coords: Y=0 is Top.
-          // So if Look Up (+90), we want Y=0.
-          // v = 0.5 - (90/180) = 0 -> Correct.
-          
-          const hit = findAnnotation(u, v);
-          
-          if (hit) {
-              handleObjectInView(hit);
-          } else {
-             // Lost focus
-             lastLookedAt = null;
-             if (dwellTimer) {
-                 clearTimeout(dwellTimer);
-                 dwellTimer = null;
-             }
-          }
-      }
-
-      function findAnnotation(u, v) {
-          // u, v are 0..1
-          // annotations is global populated below
-          if (!window.labAnnotations) return null;
-          
-          // x, y, width, height in CSV are pixels relative to 1024x506
-          const W = 1024;
-          const H = 506;
+          const visible = [];
           
           for (const item of window.labAnnotations) {
-              const annX = parseFloat(item.x) / W;
-              const annY = parseFloat(item.y) / H;
-              const annW = parseFloat(item.width) / W;
-              const annH = parseFloat(item.height) / H;
+               // Item Center
+               const W = 1024;
+               const H = 506;
+               const annX = parseFloat(item.x) / W;
+               const annY = parseFloat(item.y) / H;
+               const annW = parseFloat(item.width) / W;
+               const annH = parseFloat(item.height) / H;
+               
+               const itemCX = annX + (annW/2);
+               const itemCY = annY + (annH/2);
+               
+               // Check Range V
+               if (Math.abs(itemCY - centerV) > halfV + (annH/2)) continue;
+               
+               // Check Range U (Handle Wrapping)
+               let diffU = Math.abs(itemCX - centerU);
+               if (diffU > 0.5) diffU = 1.0 - diffU; // Shortest path around cylinder
+               
+               if (diffU <= halfH + (annW/2)) {
+                   visible.push(item.annotation);
+               }
+          }
+          
+          // Sort for stability
+          visible.sort();
+          const signature = visible.join(", ");
+
+          // DWELL LOGIC STATE MACHINE
+          if (signature !== candidateVisible) {
+              // CHANGE DETECTED: Start timer for new candidate
+              // console.log("Gaze candidate changed:", signature);
+              candidateVisible = signature;
+              candidateStartTime = Date.now();
+          } else {
+              // NO CHANGE: Check if we have dwelled long enough
+              const elapsed = Date.now() - candidateStartTime;
               
-              if (u >= annX && u <= annX + annW &&
-                  v >= annY && v <= annY + annH) {
-                  return item.annotation;
+              if (elapsed >= DWELL_MS && signature !== lastVisibleObjects) {
+                   // CONFIRMED!
+                   lastVisibleObjects = signature;
+                   console.log("Confirmed Gaze Focus:", signature);
+
+                   if (isConnected && liveClient && signature) {
+                        liveClient.sendTextContext(`CONTEXT: User is looking at: [${signature}]`);
+                   }
               }
           }
-          return null;
       }
-      
-      function handleObjectInView(objectName) {
-          if (lastLookedAt === objectName) return; // Already tracking this dwell
-          
-          lastLookedAt = objectName;
-          
-          // Reset Dwell
-          if (dwellTimer) clearTimeout(dwellTimer);
-          
-          // Start Dwell
-          dwellTimer = setTimeout(() => {
-              triggerContextUpdate(objectName);
-          }, DWELL_THRESHOLD);
-      }
-      
-      function triggerContextUpdate(objectName) {
-          const now = Date.now();
-          // Cooldown check
-          if (history[objectName] && (now - history[objectName] < COOLDOWN)) {
-              return; // Too soon
-          }
-          
-          console.log("Triggering Context:", objectName);
-          history[objectName] = now;
-          
-          // Send to Gemini
-          if (isConnected && liveClient) {
-              liveClient.sendTextContext(`CONTEXT: User is looking at object: "${objectName}".`);
-          }
-      }
-
     </script>
     <style>
       #ui-controls {
