@@ -149,6 +149,7 @@
       let liveClient = null;
       let audioRecorder = null;
       let audioPlayer = null;
+      let speechRecognition = null;
       
       // Data (exposed for the Gaze logic)
       let annotations = [];
@@ -273,8 +274,12 @@ ${annotations}
             iconMicOff.style.display = 'none';
             iconMicOn.style.display = 'block';
             
+            
             // Start Gaze Loop
             startGazeTracking();
+            
+            // Start Local Speech Logging
+            startSpeechLogger();
 
         } catch (e) {
             console.error("Connection failed", e);
@@ -297,6 +302,54 @@ ${annotations}
         iconMicOn.style.display = 'none';
         
         stopGazeTracking();
+        stopSpeechLogger();
+      }
+
+      // --- 2.5 Local Speech Logging (Web Speech API) ---
+      function startSpeechLogger() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn("Speech Recognition API not supported in this browser.");
+            return;
+        }
+        
+        // Prevent duplicates
+        if (speechRecognition) stopSpeechLogger();
+
+        speechRecognition = new SpeechRecognition();
+        speechRecognition.continuous = true;
+        speechRecognition.interimResults = false;
+        speechRecognition.lang = 'en-US';
+
+        speechRecognition.onresult = (event) => {
+            if (event.results.length > 0) {
+               const transcript = event.results[event.results.length - 1][0].transcript;
+               if (transcript.trim()) {
+                 console.log("[USER]", transcript);
+               }
+            }
+        };
+        
+        speechRecognition.onend = () => {
+            // Auto-restart if we are still connected
+            if (isConnected && speechRecognition) {
+                 try { speechRecognition.start(); } catch(e){}
+            }
+        };
+
+        try {
+            speechRecognition.start();
+        } catch(e) {
+            console.error("Failed to start speech logging:", e);
+        }
+      }
+
+      function stopSpeechLogger() {
+        if (speechRecognition) {
+            const recognition = speechRecognition;
+            speechRecognition = null; // Unset to prevent auto-restart in onend
+            try { recognition.stop(); } catch(e) {}
+        }
       }
 
       // --- 3. Gaze Tracking Logic ---

@@ -29,7 +29,7 @@ export class LiveClient {
           setup: {
             model: "models/" + this.model,
             generationConfig: {
-              responseModalities: ["AUDIO"],
+              responseModalities: ["AUDIO", "TEXT"],
               speechConfig: {
                   voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
               }
@@ -44,13 +44,28 @@ export class LiveClient {
       };
 
       this.ws.onmessage = async (event) => {
+        let msg;
         if (event.data instanceof Blob) {
-            // Usually we receive text frames with JSON, but if blob, read it
             const text = await event.data.text();
-            this.handleMessage(JSON.parse(text));
+            msg = JSON.parse(text);
         } else {
-            this.handleMessage(JSON.parse(event.data));
+            msg = JSON.parse(event.data);
         }
+        
+        // Log "Server Turn" or meaningful events to Remote Log
+        if (msg.serverContent) {
+            if (msg.serverContent.modelTurn) {
+                console.log("[GEMINI] Model is speaking/responding...");
+            }
+            if (msg.serverContent.turnComplete) {
+                console.log("[GEMINI] Turn Complete.");
+            }
+        }
+        
+        // Un-comment to see raw if needed, but it's spammy with audio chunks
+        // console.log("RAW:", JSON.stringify(msg).substring(0, 100));
+
+        this.handleMessage(msg);
       };
 
       this.ws.onerror = (err) => {
@@ -74,6 +89,8 @@ export class LiveClient {
             if (this.onAudio) {
                 this.onAudio(part.inlineData.data); 
             }
+        } else if (part.text) {
+            console.log("[GEMINI]", part.text);
         }
       }
     }
