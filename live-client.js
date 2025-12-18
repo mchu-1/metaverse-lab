@@ -27,27 +27,27 @@ export class LiveClient {
     };
 
     try {
-        console.log("Connecting to Gemini Live API...");
-        this.session = await this.client.media.connect({
+        this.session = await this.client.live.connect({
             model: this.model,
             config: config,
+            callbacks: {
+                onopen: () => {
+                    console.log("Connected to Gemini Live API");
+                },
+                onmessage: (message) => {
+                    this.handleMessage(message);
+                },
+                onclose: (event) => {
+                     console.log("Session Closed:", event);
+                     if (this.onClose) this.onClose();
+                },
+                onerror: (error) => {
+                     console.error("Session Error:", error);
+                }
+            }
         });
         
-        console.log("Session created. Setting up listeners.");
-
-        // Handle Incoming Messages
-        this.session.on('message', (message) => {
-            this.handleMessage(message);
-        });
-
-        this.session.on('close', (event) => {
-            console.log("Session Closed:", event);
-            if (this.onClose) this.onClose();
-        });
-
-        this.session.on('error', (error) => {
-            console.error("Session Error:", error);
-        });
+        console.log("Session created.");
 
     } catch (e) {
         console.error("Failed to connect:", e);
