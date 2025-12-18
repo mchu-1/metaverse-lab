@@ -233,6 +233,11 @@
                 disconnectAgent();
             };
 
+            // Handle Interruption Signal
+            window.addEventListener('gemini-interrupted', () => {
+                if (audioPlayer) audioPlayer.clear();
+            });
+
             // 3. Build System Instruction with Context
             const reason = document.getElementById('reason-content').innerText;
             const equip = document.getElementById('equipment-list').innerText;

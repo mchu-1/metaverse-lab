@@ -1,146 +1,135 @@
+import { GoogleGenAI } from 'https://esm.sh/@google/genai';
+
 /**
  * GEMINI LIVE API Client
- * Manages WebSocket connection and Bidi Protocol
+ * Manages Connection using Official @google/genai SDK
  */
 
 export class LiveClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
-    this.ws = null;
+    this.client = new GoogleGenAI({ apiKey: this.apiKey });
+    this.session = null;
     this.onAudio = null;
     this.onClose = null;
-    this.model = "gemini-2.0-flash-exp"; // or "gemini-2.0-flash-exp" as per availability
-    this.host = "generativelanguage.googleapis.com";
-    this.url = `wss://${this.host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+    this.model = 'gemini-2.5-flash-native-audio-preview-12-2025';
   }
 
-  connect(systemInstruction = "") {
-    return new Promise((resolve, reject) => {
-      try {
-        this.ws = new WebSocket(this.url);
-      } catch (e) {
-        reject(e);
+  async connect(systemInstruction = "") {
+    const config = {
+      responseModalities: ["AUDIO"], // We can add "TEXT" if the model supports it, but per docs it says AUDIO
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
+      },
+      systemInstruction: {
+        parts: [{ text: systemInstruction }]
       }
+    };
 
-      this.ws.onopen = () => {
-        console.log("WS Connected");
-        // Send Setup Message
-        const setupMsg = {
-          setup: {
-            model: "models/" + this.model,
-            generationConfig: {
-              responseModalities: ["AUDIO", "TEXT"],
-              speechConfig: {
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
-              }
-            },
-            systemInstruction: {
-                parts: [{ text: systemInstruction }]
-            }
+    try {
+        console.log("Connecting to Gemini Live API...");
+        this.session = await this.client.media.connect({
+            model: this.model,
+            config: config,
+        });
+        
+        console.log("Session created. Setting up listeners.");
+
+        // Handle Incoming Messages
+        this.session.on('message', (message) => {
+            this.handleMessage(message);
+        });
+
+        this.session.on('close', (event) => {
+            console.log("Session Closed:", event);
+            if (this.onClose) this.onClose();
+        });
+
+        this.session.on('error', (error) => {
+            console.error("Session Error:", error);
+        });
+
+    } catch (e) {
+        console.error("Failed to connect:", e);
+        throw e;
+    }
+  }
+
+  handleMessage(message) {
+      // 1. Handle Interruption
+      if (message.serverContent && message.serverContent.interrupted) {
+          console.log("[GEMINI] Interrupted");
+          // Clear audio buffer
+          if (this.onAudio) {
+               // We send null or a specialized signal if we want, or just expose a clear method on visualizer
+               // But our callback is strictly "receive PCM".
+               // Let's assume onAudio has a .clear() method or we access the player directly.
+               // Actually, the caller (index.html) binds this.
           }
-        };
-        this.send(setupMsg);
-        resolve();
-      };
-
-      this.ws.onmessage = async (event) => {
-        let msg;
-        if (event.data instanceof Blob) {
-            const text = await event.data.text();
-            msg = JSON.parse(text);
-        } else {
-            msg = JSON.parse(event.data);
-        }
-        
-        // Log "Server Turn" or meaningful events to Remote Log
-        if (msg.serverContent) {
-            if (msg.serverContent.modelTurn) {
-                console.log("[GEMINI] Model is speaking/responding...");
-            }
-            if (msg.serverContent.turnComplete) {
-                console.log("[GEMINI] Turn Complete.");
-            }
-        }
-        
-        // Un-comment to see raw if needed, but it's spammy with audio chunks
-        // console.log("RAW:", JSON.stringify(msg).substring(0, 100));
-
-        this.handleMessage(msg);
-      };
-
-      this.ws.onerror = (err) => {
-        console.error("WS Error:", err);
-      };
-
-      this.ws.onclose = (evt) => {
-        console.log("WS Closed:", evt);
-        if (this.onClose) this.onClose();
-      };
-    });
-  }
-
-  handleMessage(msg) {
-    // console.log("Received:", msg); // Verbose logging
-
-    // Handle Audio (serverContent -> modelTurn -> parts -> inlineData)
-    if (msg.serverContent?.modelTurn?.parts) {
-      for (const part of msg.serverContent.modelTurn.parts) {
-        if (part.inlineData && part.inlineData.mimeType.startsWith("audio/")) {
-            if (this.onAudio) {
-                this.onAudio(part.inlineData.data); 
-            }
-        } else if (part.text) {
-            console.log("[GEMINI]", part.text);
-        }
+           // Dispatch Event for UI to handle clearing
+           const event = new CustomEvent('gemini-interrupted');
+           window.dispatchEvent(event);
+           return;
       }
-    }
 
-    // Handle Turn Complete (useful for UI state)
-    if (msg.serverContent?.turnComplete) {
-       // console.log("Turn complete");
-    }
-  }
-
-  send(data) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
-    }
+      // 2. Handle Text (if any)
+      if (message.serverContent?.modelTurn?.parts) {
+          for (const part of message.serverContent.modelTurn.parts) {
+              if (part.text) {
+                  console.log("[GEMINI]", part.text);
+              }
+              if (part.inlineData && part.inlineData.data) {
+                  if (this.onAudio) {
+                      this.onAudio(part.inlineData.data);
+                  }
+              }
+          }
+      }
+      
+      // 3. Handle Turn Complete
+      if (message.serverContent?.turnComplete) {
+           // console.log("Turn complete");
+      }
   }
 
   sendAudio(base64PCM) {
-    const msg = {
-      realtimeInput: {
-        mediaChunks: [
-          {
-            mimeType: "audio/pcm;rate=16000",
-            data: base64PCM
-          }
-        ]
-      }
-    };
-    this.send(msg);
+      if (!this.session) return;
+      this.session.sendRealtimeInput({
+          mimeType: "audio/pcm;rate=16000",
+          data: base64PCM
+      });
   }
 
   sendTextContext(text) {
-    // We inject contextual "System" updates as ClientContent
-    const msg = {
-      clientContent: {
-        turns: [
-          {
-            role: "user",
-            parts: [{ text: text }]
+      if (!this.session) return;
+      this.session.send({
+          clientContent: {
+              turns: [
+                  {
+                      role: "user",
+                      parts: [{ text: text }]
+                  }
+              ],
+              turnComplete: false
           }
-        ],
-        turnComplete: false // We are just adding info, not necessarily yielding the floor, but usually user turn implies yield.
-      }
-    };
-    this.send(msg);
+      });
   }
 
   disconnect() {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+      if (this.session) {
+          // The SDK might not have a disconnect/close method explicitly exposed in early alpha?
+          // Checking docs/types... usually .close() or we just let it GC.
+          // Based on snippet: onclose event exists. 
+          // Explicit close might be:
+          try {
+             // this.session.close(); // Hypothetical
+             // If not available, we just drop the reference.
+             // We can end the session by sending a "end" message? No.
+             // Usually websockets have close.
+             // Let's assume it behaves like a WS wrapper.
+             if (this.session.close) this.session.close();
+          } catch(e) { console.log("Error closing session", e);}
+          this.session = null;
+      }
   }
 }

@@ -197,4 +197,12 @@ export class AudioStreamPlayer {
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;
   }
+
+  clear() {
+    this.queue = [];
+    // Note: We can't stop currently playing nodes easily without keeping track of them.
+    // Ideally we'd store the source nodes and call stop().
+    // For now, we just reset the timing so new audio plays immediately.
+    this.nextStartTime = this.audioContext ? this.audioContext.currentTime : 0;
+  }
 }
