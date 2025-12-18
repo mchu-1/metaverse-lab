@@ -24,7 +24,7 @@
       vr-mode-ui="enabled: true" enables the VR button.
       device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
     -->
-    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true">
       <a-assets>
         <img id="sky" src="nslab-world.png" />
       </a-assets>
@@ -39,7 +39,6 @@
         look-controls="reverseMouseDrag: true; touchEnabled: true"
         position="0 1.6 0"
       ></a-entity>
-      <a-entity id="marker-container"></a-entity>
     </a-scene>
     <div id="ui-controls">
       <button id="btn-fullscreen" class="ui-btn" aria-label="Toggle Fullscreen">
@@ -52,12 +51,20 @@
           <path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
         </svg>
       </button>
+      <!-- Custom VR Button -->
+      <button id="btn-vr" class="ui-btn" aria-label="Enter VR">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <path fill="currentColor" d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-7 0c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm16 0c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+        </svg>
+      </button>
     </div>
 
     <script>
       // UI Logic
       const btnFullscreen = document.getElementById('btn-fullscreen');
       const btnReset = document.getElementById('btn-reset');
+      const btnVr = document.getElementById('btn-vr');
+      const scene = document.querySelector('a-scene');
       const cameraEntity = document.querySelector('[camera]');
 
       // Fullscreen Toggle
@@ -86,6 +93,15 @@
              controls.pitchObject.rotation.x = 0;
              controls.yawObject.rotation.y = 0;
            }
+        }
+      });
+
+      // VR Toggle
+      btnVr.addEventListener('click', () => {
+        if (scene.is('vr-mode')) {
+          scene.exitVR();
+        } else {
+          scene.enterVR();
         }
       });
     </script>
@@ -136,62 +152,10 @@
       }
 
       /* Equipment Label Overlay */
-      #label-overlay {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(10, 10, 10, 0.9);
-        border: 1px solid rgba(0, 255, 255, 0.3);
-        border-radius: 12px;
-        color: white;
-        padding: 20px;
-        z-index: 2000;
-        max-width: 300px;
-        text-align: center;
-        backdrop-filter: blur(8px);
-        display: none;
-        box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
-        animation: fadeIn 0.3s ease;
-      }
-      
-      #label-overlay h3 {
-        margin: 0 0 10px 0;
-        color: #00ffff;
-        font-family: sans-serif;
-      }
-      
-      #label-overlay p {
-        margin: 5px 0;
-        font-size: 0.9em;
-        color: #cccccc;
-        font-family: sans-serif;
-      }
-
-      #label-overlay .close-btn {
-        margin-top: 15px;
-        padding: 6px 12px;
-        background: rgba(255, 255, 255, 0.1);
-        border: none;
-        border-radius: 4px;
-        color: white;
-        cursor: pointer;
-        font-size: 0.8em;
-      }
-      
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translate(-50%, -40%); }
-        to { opacity: 1; transform: translate(-50%, -50%); }
+        white-space: nowrap;
+        border: 0;
       }
     </style>
-    
-    <!-- Equipment Label Overlay -->
-    <div id="label-overlay">
-      <h3 id="label-title">Equipment</h3>
-      <p id="label-model">Model</p>
-      <p id="label-desc">Description</p>
-      <button class="close-btn" onclick="document.getElementById('label-overlay').style.display='none'">Close</button>
-    </div>
 
     <!-- Hidden Accessibility Layer for AI Agents -->
     <div id="accessibility-tree" class="visually-hidden" aria-hidden="false">
@@ -222,7 +186,6 @@
             const csvText = await equipRes.text();
             const equipmentData = parseCSV(csvText);
             renderEquipmentTable(equipmentData);
-            spawnEquipmentMarkers(equipmentData);
           }
         } catch (e) {
           console.error("Failed to load metadata:", e);
@@ -298,45 +261,9 @@
         container.appendChild(table);
       }
 
-      function spawnEquipmentMarkers(data) {
-        const scene = document.getElementById('marker-container');
-        const radius = 4; // Distance from center
-        const height = 1.6; // Eye level
-        
-        data.forEach((item, index) => {
-          if (!item.name) return;
-          
-          const angle = (index / data.length) * Math.PI * 2;
-          const x = radius * Math.cos(angle);
-          const z = radius * Math.sin(angle);
-          
-          // Create Marker (Sphere)
-          const marker = document.createElement('a-sphere');
-          marker.setAttribute('position', `${x} ${height} ${z}`);
-          marker.setAttribute('radius', '0.15');
-          marker.setAttribute('color', '#00FFFF');
-          marker.setAttribute('opacity', '0.7');
-          marker.setAttribute('class', 'clickable');
-          
-          // Add animation
-          marker.setAttribute('animation', `property: scale; from: 1 1 1; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true; easing: easeInOutSine; startEvents: loaded`);
-          
-          // Add interaction
-          marker.addEventListener('click', () => {
-            showLabel(item);
-          });
-          
-          scene.appendChild(marker);
-        });
-      }
-
-      function showLabel(item) {
-        const overlay = document.getElementById('label-overlay');
-        document.getElementById('label-title').innerText = item.name || 'Equipment';
-        document.getElementById('label-model').innerText = item.model || '';
-        document.getElementById('label-desc').innerText = item.specs || item.purpose || '';
-        
-        overlay.style.display = 'block';
+        table.appendChild(thead);
+        table.appendChild(tbody);
+        container.appendChild(table);
       }
 
       // Initialize
