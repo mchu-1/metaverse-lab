@@ -143,14 +143,39 @@
       import { GOOGLE_CLIENT_ID } from './config.js';
       
       // Wait for library to load
+      let gsiAttempts = 0;
       const checkGSI = setInterval(() => {
+        gsiAttempts++;
         if (window.google && window.google.accounts) {
           clearInterval(checkGSI);
-          initializeGSI();
+          try {
+              initializeGSI();
+          } catch(e) {
+              console.error("GSI Init Error:", e);
+              alert("Google Sign-In Error: " + e.message);
+              // Fallback: Unlock anyway so they can try manual key if they have one?
+              // document.getElementById('btn-connect').style.display = 'flex';
+          }
+        }
+        
+        // Timeout after 5 seconds
+        if (gsiAttempts > 50) {
+             clearInterval(checkGSI);
+             console.error("GSI Script timed out.");
+             // Fallback logic
+             document.getElementById('google-signin-btn').innerText = "Sign-In Failed (Script Timeout). Check Console.";
+             document.getElementById('google-signin-btn').style.color = "red";
+             
+             // Emergency Unlock (Optional, let's keep it hidden for safety, or show prompt)
         }
       }, 100);
 
       function initializeGSI() {
+          if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) {
+              alert("Configuration Error: Missing Google Client ID in config.js");
+              return;
+          }
+
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse
