@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <title>Metaverse Lab</title>
     <meta name="description" content="Metaverse Lab - 360 View" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
       /* Ensure the scene takes up the full viewport */
@@ -13,22 +15,28 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
+        background-color: #000;
       }
     </style>
   </head>
   <body>
-    <a-scene>
+    <!-- 
+      vr-mode-ui="enabled: true" enables the VR button.
+      device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
+    -->
+    <a-scene vr-mode-ui="enabled: true" device-orientation-permission-ui="enabled: true">
       <a-assets>
-        <img id="sky" src="network-lab-sphere.jpg" />
+        <img id="sky" src="nslab-world.png" />
       </a-assets>
 
       <!-- 360 Sky Sphere -->
       <a-sky src="#sky" rotation="0 -130 0"></a-sky>
 
       <!-- Camera with look controls -->
+      <!-- reverseMouseDrag: true is often preferred for 360 drag interaction -->
       <a-entity
         camera
-        look-controls="reverseMouseDrag: true"
+        look-controls="reverseMouseDrag: true; touchEnabled: true"
         position="0 1.6 0"
       ></a-entity>
     </a-scene>
