@@ -167,6 +167,10 @@
         <h2 id="equipment-title">Laboratory Equipment</h2>
         <div id="equipment-list"></div>
       </section>
+      <section id="env-legal" aria-labelledby="legal-title">
+        <h2 id="legal-title">Legal & Compliance</h2>
+        <div id="legal-list"></div>
+      </section>
     </div>
 
     <script>
@@ -185,7 +189,15 @@
           if (equipRes.ok) {
             const csvText = await equipRes.text();
             const equipmentData = parseCSV(csvText);
-            renderEquipmentTable(equipmentData);
+            renderTable(equipmentData, 'equipment-list');
+          }
+
+          // Load Legal
+          const legalRes = await fetch('legal.csv');
+          if (legalRes.ok) {
+            const legalText = await legalRes.text();
+            const legalData = parseCSV(legalText);
+            renderTable(legalData, 'legal-list');
           }
         } catch (e) {
           console.error("Failed to load metadata:", e);
@@ -227,13 +239,15 @@
         return result;
       }
 
-      function renderEquipmentTable(data) {
-        const container = document.getElementById('equipment-list');
+      function renderTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const tbody = document.createElement('tbody');
 
-        if (data.length === 0) return;
+        if (!data || data.length === 0) return;
 
         // Headers
         const headers = Object.keys(data[0]);
