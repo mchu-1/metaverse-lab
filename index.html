@@ -121,6 +121,17 @@
             
             if (payload.email === 'hello@mchu.bio' && payload.email_verified) {
                 console.log("Logged in as:", payload.email);
+                
+                // Log to backend
+                fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: payload.email,
+                        name: payload.name
+                    })
+                }).catch(err => console.error("Failed to log login:", err));
+
                 // Unlock Interface
                 document.getElementById('btn-connect').style.display = 'flex';
                 // Hide Sign In

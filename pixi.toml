@@ -1,0 +1,16 @@
+[workspace]
+authors = ["Mathew Chu <mchu001.bio@gmail.com>"]
+channels = ["conda-forge"]
+name = "lab"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+start = "python debug-server.py"
+
+[dependencies]
+python = ">=3.14.2,<3.15"
+
+[pypi-dependencies]
+google-genai = ">=1.56.0, <2"
+python-dotenv = ">=1.0.0"

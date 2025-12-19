@@ -6,6 +6,13 @@ import os
 import re
 import datetime
 import base64
+import sqlite3
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("Warning: python-dotenv not installed. .env file might not be loaded.")
 
 try:
     from google import genai
@@ -31,6 +38,17 @@ def get_api_key():
 API_KEY = get_api_key()
 if not API_KEY:
     print("Warning: GEMINI_API_KEY not found in env.js or environment variables.")
+
+# Initialize SQLite Database
+def init_db():
+    conn = sqlite3.connect('user_data.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS login_history
+                 (email text, name text, timestamp datetime DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
+    conn.close()
+
+init_db()
 
 class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
@@ -76,6 +94,34 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[VISION] Error: {e}")
                 self.send_error(500, f"Vision proxy failed: {e}")
+
+        elif self.path == '/auth/login':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data)
+                
+                email = data.get('email')
+                name = data.get('name')
+                
+                if not email:
+                    self.send_error(400, "Missing email")
+                    return
+
+                conn = sqlite3.connect('user_data.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO login_history (email, name) VALUES (?, ?)", (email, name))
+                conn.commit()
+                conn.close()
+                
+                print(f"[AUTH] Logged login for: {email}")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'logged'}).encode('utf-8'))
+                
+            except Exception as e:
+                print(f"[AUTH] Error: {e}")
+                self.send_error(500, f"Auth logging failed: {e}")
 
         else:
             self.send_error(404)
