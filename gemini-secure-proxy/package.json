@@ -1,0 +1,16 @@
+{
+  "name": "gemini-secure-proxy",
+  "version": "1.0.0",
+  "description": "Secure Proxy for Gemini Live API",
+  "main": "src/worker.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "wrangler": "^4.56.0"
+  }
+}

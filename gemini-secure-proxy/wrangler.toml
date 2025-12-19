@@ -1,0 +1,8 @@
+name = "gemini-secure-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-04-05"
+
+# Run `wrangler secret put GEMINI_API_KEY` to set the key.
+
+[observability]
+enabled = true
