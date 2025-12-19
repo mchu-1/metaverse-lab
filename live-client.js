@@ -37,14 +37,14 @@ export class LiveClient {
                 functionDeclarations: [
                     {
                         name: "look_at",
-                        description: "Rotates the camera to look at a specific direction (yaw and pitch).",
+                        description: "Rotates the camera to look at a specific point on the map. (x, y) are normalized coordinates (0.0-1.0) on the equirectangular map.",
                         parameters: {
                             type: "OBJECT",
                             properties: {
-                                yaw: { type: "NUMBER", description: "Yaw angle in degrees (0-360)." },
-                                pitch: { type: "NUMBER", description: "Pitch angle in degrees (-90 to 90)." }
+                                x: { type: "NUMBER", description: "Horizontal position (0.0=left, 1.0=right)." },
+                                y: { type: "NUMBER", description: "Vertical position (0.0=top, 1.0=bottom)." }
                             },
-                            required: ["yaw", "pitch"]
+                            required: ["x", "y"]
                         }
                     },
                     {
@@ -187,7 +187,7 @@ export class LiveClient {
           if (window.labControl) {
               try {
                   if (name === "look_at") {
-                      window.labControl.setRotation(args.yaw, args.pitch);
+                      window.labControl.lookAtCoordinate(args.x, args.y);
                       result = { result: "ok" };
                   } else if (name === "reset_view") {
                       window.labControl.reset();

@@ -255,36 +255,82 @@
               }
           },
           
-          setRotation: (targetYawDeg, targetPitchDeg, duration = 1500) => {
+          lookAtCoordinate: (u, v, duration = 2000) => {
              window.labControl.cancelAnimation();
              
              if (!cameraEntity) return;
-
-             // A-Frame Look Controls overrides rotation directly
              const controls = cameraEntity.components['look-controls'];
-             if (!controls) {
-                 // Fallback if no controls
-                 cameraEntity.setAttribute('rotation', `${targetPitchDeg} ${targetYawDeg} 0`);
-                 return;
-             }
+             if (!controls) return;
 
-             // current rotations in radians
-             const startYawRad = controls.yawObject.rotation.y;
-             const startPitchRad = controls.pitchObject.rotation.x;
+             // 1. Current Quaternion
+             // A-Frame LookControls uses a pitchObject (X rotation) and yawObject (Y rotation)
+             // We need to combine them to get the current world quaternion (ignoring position)
+             const startYaw = controls.yawObject.rotation.y;
+             const startPitch = controls.pitchObject.rotation.x;
              
-             const startYawDeg = THREE.MathUtils.radToDeg(startYawRad);
-             const startPitchDeg = THREE.MathUtils.radToDeg(startPitchRad);
+             const startQ = new THREE.Quaternion();
+             startQ.setFromEuler(new THREE.Euler(startPitch, startYaw, 0, 'YXZ'));
 
-             // Calculate shortest path for Yaw
-             let deltaYaw = (targetYawDeg - startYawDeg) % 360;
-             if (deltaYaw > 180) deltaYaw -= 360;
-             if (deltaYaw < -180) deltaYaw += 360;
+             // 2. Target Quaternion from UV
+             // Map Logic: 
+             // U (0->1) map to Longitude. Skybox is rotated -130 deg around Y.
+             // V (0->1) map to Latitude (90 -> -90).
              
-             const endYawRad = THREE.MathUtils.degToRad(startYawDeg + deltaYaw);
-             const endPitchRad = THREE.MathUtils.degToRad(targetPitchDeg);
+             // Skybox rotation offset (from <a-sky rotation="0 -130 0">)
+             const skyRotationOffsetDeg = -130;
+             const skyRotationOffsetRad = THREE.MathUtils.degToRad(skyRotationOffsetDeg);
 
+             // Calculate Target Yaw (Theta)
+             // U=0 -> 0 deg, U=1 -> 360 deg. 
+             // BUT we want to match the visual map.
+             // If I look at the texture at U, that corresponds to an angle.
+             // Direction vector D = (sin(lon)cos(lat), sin(lat), cos(lon)cos(lat)) ? Standard is -Z forward in WebGL/Three
+             // Let's rely on standard spherical mapping:
+             // u = 0.5 + arctan2(z, x) / 2pi
+             // v = 0.5 - arcsin(y) / pi
+             
+             // Inverse:
+             // Longitude (theta) = (0.5 - u) * 2pi ?? No, usually u goes 0 to 1 wrapping 360.
+             // Let's assume standard equirectangular mapping where u=0 is -180, u=0.5 is 0, u=1 is 180 (or 0->360).
+             // A-Frame <a-sky> wraps standard textures.
+             // Let's try: theta = (1 - u) * 2 * Math.PI; (Inverts X because inside sphere vs outside?)
+             // Actually, for inner sphere, typically u goes 0->1 as theta goes 0->2pi (CCW from top?)
+             
+             // Simpler approach: 
+             // Yaw: (1 - u) * 360 ... because looking out from center, texture mapping might be reversed horizontally or standard.
+             // Let's assume standard: 
+             // targetYaw = (u * 360) deg ??
+             // Let's stick to the heuristic in the plan: 
+             // theta = (1 - u) * 2 * PI  (To match standard panoramic image direction usually)
+             // Then add the offset.
+             
+             const theta = -(u * 2 * Math.PI) + Math.PI/2; // Adjust phase to align 0 with -Z? 
+             // Let's blindly trust the previous 'setRotation' logic but adapted:
+             // window.labControl.getRot(yaw, pitch) -> 
+             
+             // Let's just use Euler target for simplicity of calculation, BUT store as Quiternion for SLERP.
+             // Target Yaw (in world space, matching the skybox pixel)
+             // Skybox is rotated by -130.
+             // So if pixel is at angle A on texture, World Angle is A - 130.
+             
+             // Texture Angle (0 to 360 based on U):
+             // U=0 is usually back seam. 
+             // Let's try: texYaw = (1 - u) * 2 * Math.PI; 
+             // worldYaw = texYaw + skyRotationOffsetRad;
+             
+             // Pitch (phi):
+             // V=0 (top) -> +90 deg -> EI/2
+             // V=1 (bottom) -> -90 deg -> -PI/2
+             const worldPitch = (0.5 - v) * Math.PI;
+
+             const worldYaw = ((1 - u) * 2 * Math.PI) + skyRotationOffsetRad;
+
+             const targetQ = new THREE.Quaternion();
+             targetQ.setFromEuler(new THREE.Euler(worldPitch, worldYaw, 0, 'YXZ'));
+
+             // 3. SLERP Animation
              const startTime = performance.now();
-             
+
              function animate(time) {
                  const elapsed = time - startTime;
                  const progress = Math.min(elapsed / duration, 1.0);
@@ -293,12 +339,14 @@
                  const ease = progress < 0.5 
                     ? 4 * progress * progress * progress 
                     : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-                 const currentYaw = startYawRad + (endYawRad - startYawRad) * ease;
-                 const currentPitch = startPitchRad + (endPitchRad - startPitchRad) * ease;
-
-                 controls.yawObject.rotation.y = currentYaw;
-                 controls.pitchObject.rotation.x = currentPitch;
+                 
+                 const currentQ = startQ.clone().slerp(targetQ, ease);
+                 
+                 // Apply back to controls (Extract Y rotation and X rotation)
+                 const euler = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ');
+                 
+                 controls.yawObject.rotation.y = euler.y;
+                 controls.pitchObject.rotation.x = euler.x;
 
                  if (progress < 1.0) {
                      window.labControl.animationRef = requestAnimationFrame(animate);
