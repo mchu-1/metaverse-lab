@@ -14,6 +14,12 @@
   </head>
   <body>
 
+    <!-- Loading Screen -->
+    <!-- Loading Screen (Hidden by default, shown after login) -->
+    <div id="loading-screen" class="hidden">
+      <div class="loader-ring"></div>
+      <span class="loader-text">Loading Environment</span>
+    </div>
 
     <!-- Welcome Overlay -->
     <div id="welcome-overlay">
@@ -25,9 +31,11 @@
             <path d="M2 12l10 5 10-5"/>
           </svg>
         </div>
-        <h2 class="welcome-title">NS.LAB</h2>
-        <p class="welcome-subtitle">Explore an automated molecular biology facility. Use your voice to interact with the AI assistant.</p>
-        <button class="welcome-btn" id="btn-enter">Enter Metaverse</button>
+        <h2 class="welcome-title">The Network Lab</h2>
+        <p class="welcome-subtitle">Explore an automated molecular biology facility. Sign in to access the AI control systems.</p>
+        
+        <!-- Google Sign-In Container (Moved here) -->
+        <div id="google-signin-btn" style="min-height: 48px; display: flex; justify-content: center; margin-top: 16px;"></div>
       </div>
     </div>
 
@@ -59,7 +67,7 @@
     </a-scene>
     <div id="ui-controls">
       <!-- Google Sign-In Container -->
-      <div id="google-signin-btn"></div>
+      <!-- Google Sign-In Container Removed from Dock -->
 
       <button id="btn-fullscreen" class="ui-btn" aria-label="Toggle Fullscreen">
         <svg viewBox="0 0 24 24">
@@ -76,7 +84,7 @@
       <div class="dock-divider"></div>
       
       <!-- Connect Button with States -->
-      <button id="btn-connect" class="ui-btn" aria-label="Connect to Agent" style="display: none;">
+      <button id="btn-connect" class="ui-btn" aria-label="Connect to Agent">
         <svg id="icon-mic-off" viewBox="0 0 24 24">
           <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -129,7 +137,9 @@
     <script type="module">
       import { LiveClient } from './live-client.js';
       import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
-      import { GEMINI_API_KEY } from './config.js';
+      import { GEMINI_API_KEY, GOOGLE_CLIENT_ID } from './config.js';
+
+      const appStartTime = Date.now();
 
       window.handleCredentialResponse = (response) => {
         try {
@@ -154,16 +164,36 @@
                     })
                 }).catch(err => console.error("Failed to log login:", err));
 
-                // Unlock Interface
-                document.getElementById('btn-connect').style.display = 'flex';
-                // Hide Sign In
-                const signin = document.getElementById('google-signin-btn');
-                if (signin) signin.style.display = 'none';
+                
+                // Transition Flow:
+                // 1. Hide Welcome Overlay
+                const welcomeOverlay = document.getElementById('welcome-overlay');
+                if (welcomeOverlay) welcomeOverlay.classList.remove('visible');
+                
+                // 2. Show Loading Screen
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.classList.remove('hidden');
+                    loadingScreen.style.display = 'flex';
+                    loadingScreen.style.opacity = '1';
+                    loadingScreen.style.visibility = 'visible';
+                }
+
+                // 3. Wait for scene and enter
+                // We check if scene is already ready, otherwise onSceneReady will handle it 
+                // BUT we need to flag that we are authorized to enter.
+                window.isAuthorized = true;
+                
+                // If scene was already waiting (or loaded), trigger transition
+                checkSceneAndEnter();
+
+                // Unlock Interface (but keep hidden until scene load)
+                // document.getElementById('btn-connect').style.display = 'flex';
                 
                 // Set the key for connectAgent to use
                 window.labControl.authorizedKey = GEMINI_API_KEY;
                 
-                alert(`Welcome ${payload.name}! Agent Access Granted.`);
+                // alert(`Welcome ${payload.name}! Agent Access Granted.`);
             } else {
                 alert("Access Denied: " + payload.email);
             }
@@ -173,8 +203,6 @@
       };
 
       // Initialize Google Sign-In
-      import { GOOGLE_CLIENT_ID } from './config.js';
-      
       // Wait for library to load
       let gsiAttempts = 0;
       const checkGSI = setInterval(() => {
@@ -186,8 +214,6 @@
           } catch(e) {
               console.error("GSI Init Error:", e);
               alert("Google Sign-In Error: " + e.message);
-              // Fallback: Unlock anyway so they can try manual key if they have one?
-              // document.getElementById('btn-connect').style.display = 'flex';
           }
         }
         
@@ -196,10 +222,11 @@
              clearInterval(checkGSI);
              console.error("GSI Script timed out.");
              // Fallback logic
-             document.getElementById('google-signin-btn').innerText = "Sign-In Failed (Script Timeout). Check Console.";
-             document.getElementById('google-signin-btn').style.color = "red";
-             
-             // Emergency Unlock (Optional, let's keep it hidden for safety, or show prompt)
+             const btn = document.getElementById('google-signin-btn');
+             if(btn) {
+                btn.innerText = "Sign-In Failed (Script Timeout). Check Console.";
+                btn.style.color = "red";
+             }
         }
       }, 100);
 
@@ -230,8 +257,9 @@
       // New UI Elements
 
       const welcomeOverlay = document.getElementById('welcome-overlay');
-      const btnEnter = document.getElementById('btn-enter');
+      // const btnEnter = document.getElementById('btn-enter');
       const statusIndicator = document.getElementById('status-indicator');
+      const loadingScreen = document.getElementById('loading-screen');
       
       const scene = document.querySelector('a-scene');
       const cameraEntity = document.querySelector('[camera]');
@@ -240,19 +268,68 @@
       // LOADING & WELCOME FLOW
       // ========================================
       
+      // Initial State:
+      // Welcome Overlay: Visible (via CSS or JS below)
+      // Loading Screen: Hidden
+      // Scene: Loading in background
+      
+      window.isAuthorized = false;
+      window.isSceneLoaded = false;
+
+      // Force Welcome Overlay Visible Initially
+      welcomeOverlay.classList.add('visible');
+
+      function checkSceneAndEnter() {
+         if (window.isAuthorized && window.isSceneLoaded) {
+             enterMetaverse();
+         }
+      }
+
+      function enterMetaverse() {
+         console.log("Entering Metaverse...");
+         
+         const loadingScreen = document.getElementById('loading-screen');
+         
+         // Minimum load time for effect? Maybe not needed if they just spent time logging in.
+         // Let's just give it a small beat for the 'Loading Environment' text to register if it just appeared.
+         
+         setTimeout(() => {
+            if (loadingScreen) {
+                loadingScreen.classList.add('hidden');
+                setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
+            }
+         }, 800);
+      }
+      
+      function onSceneReady() {
+        console.log("Scene Ready in Background");
+        window.isSceneLoaded = true;
+        checkSceneAndEnter();
+      }
+      
+      // Safety Timeout (in case 'loaded' event never fires due to error)
+      const loadTimeout = setTimeout(() => {
+           console.warn("Scene load timeout - forcing UI unlock");
+           onSceneReady();
+      }, 4000);
+
       // Show welcome overlay when scene is ready
       if (scene.hasLoaded) {
-        welcomeOverlay.classList.add('visible');
+        clearTimeout(loadTimeout);
+        onSceneReady();
       } else {
         scene.addEventListener('loaded', () => {
-          welcomeOverlay.classList.add('visible');
+             clearTimeout(loadTimeout);
+             onSceneReady();
         });
       }
 
-      // Handle Enter button
-      btnEnter.addEventListener('click', () => {
-        welcomeOverlay.classList.remove('visible');
-      });
+      // Handle Enter button - REMOVED (Auto-enter on login)
+      // if (btnEnter) {
+      //   btnEnter.addEventListener('click', () => {
+      //     welcomeOverlay.classList.remove('visible');
+      //   });
+      // }
 
       // ========================================
       // STATUS INDICATOR HELPERS
@@ -534,17 +611,37 @@
             }
 
             const instructions = `
-You are an intelligent AI lab assistant in the 'Network Lab'. 
+You are an intelligent AI lab assistant in the 'Network Lab'.
+You have been provided with a 360-degree equirectangular map of the environment (nslab-world.png) in your visual context.
+You can "see" the entire room.
 You have access to the user's focus of attention via system messages I will send you.
 You can also use the get_visual_context tool to take a photo of what the user is seeing and get a description. Use this when the user asks "What do I see?" or "Describe this".
 When I send "CONTEXT: User is looking at [Object Name]", you should be aware of it.
 If the object is interesting or the user dwells on it, you can offer a brief, interesting fact or description.
+Use the 'locate_object' tool to find coordinates of objects you see in the map, then use 'look_at' to guide the camera there.
 Don't be too chatty. Be helpful, concise, and professional.
 ${objectMapContext}
             `;
 
             // 4. Connect WebSocket
             await liveClient.connect(instructions);
+
+            // 4.5 Inject Visual Context (Map)
+            try {
+               const resp = await fetch('nslab-world.png');
+               const blob = await resp.blob();
+               const buffer = await blob.arrayBuffer();
+               const bytes = new Uint8Array(buffer);
+               let binary = '';
+               for (let i = 0; i < bytes.byteLength; i++) {
+                   binary += String.fromCharCode(bytes[i]);
+               }
+               const base64Map = btoa(binary);
+               liveClient.sendImage(base64Map);
+               console.log("Injected Map Context");
+            } catch(e) {
+               console.warn("Failed to inject map context:", e);
+            }
 
             // 5. Start Microphone
             await audioRecorder.start((base64PCM) => {

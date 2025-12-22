@@ -279,6 +279,19 @@ export class LiveClient {
       this.send(msg);
   }
 
+  sendImage(base64Image) {
+      const msg = {
+          realtimeInput: {
+              mediaChunks: [{
+                  mimeType: "image/png",
+                  data: base64Image
+              }]
+          }
+      };
+      this.send(msg);
+      console.log("[LiveClient] Sent Image Context");
+  }
+
   sendTextContext(text) {
       const msg = {
           clientContent: {
@@ -484,7 +497,7 @@ export class LiveClient {
            }
       }
       
-      const prompt = `Find the '${query}' in this equirectangular 360 view. Return the normalized coordinates of its center as a JSON object {x: number, y: number} where x is horizontal (0.0=left, 1.0=right) and y is vertical (0.0=top, 1.0=bottom). Return ONLY the JSON object, no markdown, no backticks.`;
+      const prompt = `Find the '${query}' in this equirectangular 360 projection. Return the normalized coordinates of its center of mass as a JSON object {x: number, y: number} where x is horizontal (0.0=left edge/-180deg, 0.5=center/0deg, 1.0=right edge/+180deg) and y is vertical (0.0=top pole, 0.5=horizon, 1.0=bottom pole). Return ONLY the JSON object.`;
       
       // Re-use queryVisionModel but with specific prompt and image
       // Note: We need a slight refactor or just copy the logic effectively for now to ensure we pass the right params

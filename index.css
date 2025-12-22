@@ -1,35 +1,34 @@
 /* ========================================
-   DESIGN TOKENS - NETWORK STATE MINIMAL
+   DESIGN TOKENS - LIGHT THEME (Cursor-Inspired)
    ======================================== */
 :root {
-  /* Core Colors - Cursor-Inspired Dark Theme */
-  --bg-color: #0a0a0b;
-  --bg-surface: #131316;
-  --bg-overlay: rgba(10, 10, 11, 0.85);
-  --bg-elevated: rgba(24, 24, 28, 0.9);
+  /* Core Colors - Clean Light Theme */
+  --bg-color: #ffffff;
+  --bg-surface: #f8f9fa;
+  --bg-overlay: rgba(255, 255, 255, 0.92);
+  --bg-elevated: rgba(255, 255, 255, 0.95);
 
   /* Borders & Accents */
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-color-strong: rgba(255, 255, 255, 0.12);
-  --border-color-hover: rgba(255, 255, 255, 0.2);
-  --border-glow: rgba(100, 180, 255, 0.15);
+  --border-color: rgba(0, 0, 0, 0.06);
+  --border-color-strong: rgba(0, 0, 0, 0.12);
+  --border-color-hover: rgba(0, 0, 0, 0.18);
+  --border-glow: rgba(0, 0, 0, 0.08);
 
-  /* Text - High contrast for dark mode */
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1a6;
-  --text-tertiary: #86868b;
-  --text-muted: #424245;
+  /* Text - Clean grays for light mode */
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #8e8e8e;
+  --text-muted: #b3b3b3;
 
-  /* Accents - Luminous & Refined */
-  --accent-primary: #ffffff;
-  --accent-secondary: #f5f5f7;
-  --accent-success: #32d74b;
-  --accent-info: #0a84ff;
-  --accent-error: #ff453a;
-  --accent-glow: rgba(100, 180, 255, 0.4);
+  /* Accents - Professional dark accents */
+  --accent-primary: #1a1a1a;
+  --accent-secondary: #333333;
+  --accent-success: #22c55e;
+  --accent-info: #3b82f6;
+  --accent-error: #ef4444;
+  --accent-glow: rgba(0, 0, 0, 0.1);
 
-  /* Typography */
-  --font-serif: "EB Garamond", Georgia, serif;
+  /* Typography - Sans-serif only */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: "SF Mono", "Fira Code", monospace;
   
@@ -54,11 +53,11 @@
   --space-xl: 32px;
   --space-2xl: 48px;
 
-  /* Effects - Glassmorphism & High-end Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  --shadow-glow: 0 0 20px rgba(100, 180, 255, 0.1);
+  /* Effects - Soft shadows for light theme */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-glow: 0 0 20px rgba(0, 0, 0, 0.05);
   --glass-blur: blur(20px) saturate(180%);
 
   /* Transitions - Snap and smooth */
@@ -205,11 +204,11 @@ body {
 
 .welcome-title {
   margin: 0 0 var(--space-sm);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 28px;
-  font-weight: var(--weight-normal);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1.1;
 }
 
@@ -229,13 +228,13 @@ body {
   background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #000000;
+  color: #ffffff;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: var(--weight-semibold);
   letter-spacing: -0.01em;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: background var(--transition-fast),
               transform var(--transition-fast),
               box-shadow var(--transition-fast);
@@ -243,7 +242,7 @@ body {
 
 .welcome-btn:hover {
   background: var(--accent-secondary);
-  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
 
@@ -340,10 +339,10 @@ body {
 
 @keyframes pulse-listening {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.3);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(52, 199, 89, 0);
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
   }
 }
 
