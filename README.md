@@ -1,1 +1,1 @@
-🌐 **The Network Lab**<sup>&reg</sup>
+🌐 **The Network Lab**<sup>TM</sup>
