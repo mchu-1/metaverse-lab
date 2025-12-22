@@ -17,23 +17,37 @@ export class AudioRecorder {
     this.onDataAvailable = onDataAvailable;
     // Note: We don't force sampleRate in constructor here because strict browser support varies.
     // Instead we accept whatever the system gives us (e.g. 48000Hz) and decimate manually.
-    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-    if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
+    // 0. Environment Checks
+    console.log(`[Mic] System Check: Secure=${window.isSecureContext}, Protocol=${location.protocol}, Host=${location.hostname}`);
+    
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("[Mic] navigator.mediaDevices is missing! This likely means you are on HTTP (not localhost) or a non-secure context.");
+        throw new Error("Secure Context Required");
     }
 
+    // 1. Simple Request (Nuclear Option)
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          // We can ask for 16k, but if the device doesn't support it, we get 48k.
-          // Better to handle resampling ourself to be safe.
-        },
-      });
+      console.log("[Mic] Requesting (audio: true)...");
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("[Mic] Access Granted.");
     } catch (e) {
-      console.error("Mic access denied:", e);
-      throw e;
+         console.error(`[Mic] Failed: ${e.name} - ${e.message}`);
+         // Enumeration check
+         try {
+             const devices = await navigator.mediaDevices.enumerateDevices();
+             const audioInputs = devices.filter(d => d.kind === 'audioinput');
+             console.log(`[Mic] Device Enumeration (${audioInputs.length}):`);
+             audioInputs.forEach(d => console.log(`  - ${d.label} (${d.deviceId})`));
+         } catch(e2) {
+             console.error("[Mic] Enumeration failed:", e2);
+         }
+         throw e;
+    }
+
+    // 2. Initialize Audio Context AFTER permission granted
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.audioContext.state === "suspended") {
+      await this.audioContext.resume();
     }
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -109,10 +123,12 @@ export class AudioRecorder {
       
       // Visual Debug: Calculate approximate volume
       let sum = 0;
-      for (let i = 0; i < inputData.length; i += 10) { // Subsample for speed
-          sum += Math.abs(inputData[i]);
+      // Use float32Data, not inputData (which is undefined here)
+      const debugLimit = Math.min(float32Data.length, 1000); // Check first 1000 samples
+      for (let i = 0; i < debugLimit; i += 10) { 
+          sum += Math.abs(float32Data[i]);
       }
-      const avg = sum / (inputData.length / 10);
+      const avg = sum / (debugLimit / 10);
       
       // Log occasionally to prove mic is working
       if (!this.frameCount) this.frameCount = 0;
@@ -151,10 +167,13 @@ export class AudioStreamPlayer {
       await this.audioContext.resume();
     }
     this.nextStartTime = this.audioContext.currentTime;
+    this.activeSources = [];
   }
 
   addPCM16(base64Data) {
     if (!this.audioContext) return;
+
+    console.log(`[AudioPlayer] Received ${base64Data.length} bytes of base64`);
 
     // Decode Base64
     const binaryString = atob(base64Data);
@@ -196,13 +215,30 @@ export class AudioStreamPlayer {
 
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;
+
+    // Track source
+    this.activeSources.push(source);
+    source.onended = () => {
+      this.activeSources = this.activeSources.filter(s => s !== source);
+    };
   }
 
   clear() {
     this.queue = [];
-    // Note: We can't stop currently playing nodes easily without keeping track of them.
-    // Ideally we'd store the source nodes and call stop().
-    // For now, we just reset the timing so new audio plays immediately.
+    
+    // Stop all currently playing sources
+    if (this.activeSources) {
+        this.activeSources.forEach(source => {
+            try {
+                source.stop();
+            } catch (e) {
+                // Ignore errors if already stopped
+            }
+        });
+        this.activeSources = [];
+    }
+
+    // Reset timing
     this.nextStartTime = this.audioContext ? this.audioContext.currentTime : 0;
   }
 }

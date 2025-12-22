@@ -24,16 +24,28 @@ PORT = 8081
 
 # Helper to read API key from env.js (since it's gitignored and we can't import js in python easily)
 def get_api_key():
+    # 1. Try config.js (legacy/dev) but check if it's a real key, not a Proxy URL
     try:
         with open('config.js', 'r') as f:
             content = f.read()
-            # Look for export const GEMINI_API_KEY = "..."
             match = re.search(r'GEMINI_API_KEY\s*=\s*["\']([^"\']+)["\']', content)
             if match:
-                return match.group(1)
+                candidate = match.group(1)
+                # If it starts with 'AIza', it's a real key.
+                # If it starts with 'wss://' or 'http', it's a Proxy URL -> IGNORE for server usage.
+                if candidate.startswith('AIza'):
+                    return candidate
+                else:
+                    print(f"Ignoring PROXY URL in config.js: {candidate[:10]}... (using env ver instead)")
     except FileNotFoundError:
         pass
-    return os.environ.get("GEMINI_API_KEY")
+    
+    # 2. Try Environment Variable (Preferred for Server)
+    env_key = os.environ.get("GEMINI_API_KEY")
+    if env_key:
+        return env_key
+        
+    return None
 
 API_KEY = get_api_key()
 if not API_KEY:

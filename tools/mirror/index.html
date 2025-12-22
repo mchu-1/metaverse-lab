@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Dimension - Lab Annotator</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --accent-color: #58a6ff;
+            --border-color: #30363d;
+            --panel-bg: #161b22;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #8b949e;
+        }
+
+        select, button {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        button {
+            cursor: pointer;
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button.secondary {
+            background-color: var(--border-color);
+        }
+
+        #annotation-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background-color: var(--bg-color);
+        }
+
+        .annotation-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .annotation-item:last-child {
+            border-bottom: none;
+        }
+
+        .delete-btn {
+            color: #f85149;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 4px;
+            font-size: 1.1rem;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            overflow: auto;
+            position: relative;
+            background-color: #000;
+            cursor: crosshair;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-width: none; /* Allow canvas to be larger than screen if needed */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div>
+            <h1>Mirror Dimension</h1>
+            <p style="font-size: 0.8rem; opacity: 0.7;">Metaverse Object Labeller</p>
+        </div>
+
+        <div class="control-group">
+            <label for="equipment-select">Select Equipment</label>
+            <select id="equipment-select">
+                <option value="" disabled selected>Loading equipment...</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>Annotations (<span id="count">0</span>)</label>
+            <div id="annotation-list">
+                <!-- Items will be added here -->
+            </div>
+        </div>
+
+        <div class="control-group">
+            <button onclick="exportCSV()">Export CSV</button>
+            <button onclick="clearAnnotations()" class="secondary">Clear All</button>
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const equipmentSelect = document.getElementById('equipment-select');
+        const annotationList = document.getElementById('annotation-list');
+        const countSpan = document.getElementById('count');
+        
+        let image = new Image();
+        let annotations = []; // { id, name, x, y, width, height }
+        let isDrawing = false;
+        let startX, startY;
+        
+        // Load Assets
+        window.addEventListener('load', () => {
+            loadEquipment();
+            loadImage();
+        });
+
+        function loadEquipment() {
+            fetch('equipment.csv')
+                .then(response => response.text())
+                .then(text => {
+                    const lines = text.trim().split('\n');
+                    // Assumes header is first line
+                    const headers = lines[0].split(',');
+                    const nameIndex = headers.findIndex(h => h.trim().toLowerCase() === 'name');
+                    
+                    equipmentSelect.innerHTML = '<option value="" disabled selected>Select Object...</option>';
+                    
+                    // Start from index 1 to skip header
+                    for (let i = 1; i < lines.length; i++) {
+                        // Handle potential quotes in CSV which might contain commas, 
+                        // but for now simple split is likely sufficient given the file I saw.
+                        // The file has quotes around some fields like "i9, 64GB...".
+                        // 'name' is the first column and didn't have quotes in the sample.
+                        // Let's use a regex for better CSV parsing just in case.
+                        const row = parseCSVLine(lines[i]);
+                        if (row && row[nameIndex]) {
+                            const option = document.createElement('option');
+                            option.value = row[nameIndex].trim();
+                            option.textContent = row[nameIndex].trim();
+                            equipmentSelect.appendChild(option);
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('Error loading equipment.csv:', err);
+                    equipmentSelect.innerHTML = '<option>Error loading List</option>';
+                    alert('Make sure to run this via a local server to load the CSV!');
+                });
+        }
+
+        // Simple CSV regex parser to handle quoted fields
+        function parseCSVLine(text) {
+            let re_valid = /^\s*(?:'[^'\\]*(?:\\[\S\s][^'\\]*)*'|"[^"\\]*(?:\\[\S\s][^"\\]*)*"|[^,'"\s\\]*(?:\s+[^,'"\s\\]+)*)\s*(?:,\s*(?:'[^'\\]*(?:\\[\S\s][^'\\]*)*'|"[^"\\]*(?:\\[\S\s][^"\\]*)*"|[^,'"\s\\]*(?:\s+[^,'"\s\\]+)*)\s*)*$/;
+            let re_value = /(?!\s*$)\s*(?:'([^'\\]*(?:\\[\S\s][^'\\]*)*)'|"([^"\\]*(?:\\[\S\s][^"\\]*)*)"|([^,'"\s\\]*(?:\s+[^,'"\s\\]+)*))\s*(?:,|$)/g;
+            
+            if (!re_valid.test(text)) return null;
+            
+            let a = [];
+            text.replace(re_value, function(m0, m1, m2, m3) {
+                if      (m1 !== undefined) a.push(m1.replace(/\\'/g, "'"));
+                else if (m2 !== undefined) a.push(m2.replace(/\\"/g, '"'));
+                else if (m3 !== undefined) a.push(m3);
+                return ''; 
+            });
+            if (/,\s*$/.test(text)) a.push('');
+            return a;
+        }
+
+        function loadImage() {
+            // Using the filename provided in the prompt
+            image.src = 'network-lab-sphere.jpg';
+            image.onload = () => {
+                // Resize canvas to match image
+                canvas.width = image.width;
+                canvas.height = image.height;
+                draw();
+            };
+            image.onerror = () => {
+                alert('Could not load network-lab-sphere.jpg');
+            };
+        }
+
+        // Drawing Logic
+        canvas.addEventListener('mousedown', (e) => {
+            if (!equipmentSelect.value) {
+                alert('Please select an equipment name first!');
+                return;
+            }
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            // Calculate scale in case of css resizing (though we try to keep 1:1)
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            draw();
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const currentX = (e.clientX - rect.left) * scaleX;
+            const currentY = (e.clientY - rect.top) * scaleY;
+            
+            const w = currentX - startX;
+            const h = currentY - startY;
+
+            ctx.strokeStyle = '#58a6ff';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(startX, startY, w, h);
+            
+            ctx.fillStyle = 'rgba(88, 166, 255, 0.2)';
+            ctx.fillRect(startX, startY, w, h);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const currentX = (e.clientX - rect.left) * scaleX;
+            const currentY = (e.clientY - rect.top) * scaleY;
+
+            const w = currentX - startX;
+            const h = currentY - startY;
+
+            // Normalize rect (handle negative width/height)
+            const box = {
+                id: Date.now(),
+                name: equipmentSelect.value,
+                x: w < 0 ? currentX : startX,
+                y: h < 0 ? currentY : startY,
+                width: Math.abs(w),
+                height: Math.abs(h)
+            };
+
+            // Don't save if too small
+            if (box.width > 5 && box.height > 5) {
+                annotations.push(box);
+                updateList();
+            }
+            draw();
+        });
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0);
+
+            // Draw all annotations
+            annotations.forEach(box => {
+                ctx.strokeStyle = '#3fb950'; // Green for saved
+                ctx.lineWidth = 3;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+                // Label
+                ctx.fillStyle = '#3fb950';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText(box.name, box.x, box.y - 10);
+            });
+        }
+
+        function updateList() {
+            annotationList.innerHTML = '';
+            countSpan.textContent = annotations.length;
+            
+            annotations.slice().reverse().forEach(box => {
+                const div = document.createElement('div');
+                div.className = 'annotation-item';
+                div.innerHTML = `
+                    <span><b>${box.name}</b> <br> <span style="font-size:0.7em; color:#8b949e">x:${Math.round(box.x)}, y:${Math.round(box.y)}</span></span>
+                    <button class="delete-btn" onclick="removeAnnotation(${box.id})">&times;</button>
+                `;
+                annotationList.appendChild(div);
+            });
+        }
+
+        // Exposed to global scope for onclick attributes
+        window.removeAnnotation = function(id) {
+            annotations = annotations.filter(a => a.id !== id);
+            updateList();
+            draw();
+        };
+
+        window.clearAnnotations = function() {
+            if(confirm('Clear all annotations?')) {
+                annotations = [];
+                updateList();
+                draw();
+            }
+        };
+
+        window.exportCSV = function() {
+            if (annotations.length === 0) {
+                alert("No annotations to export.");
+                return;
+            }
+
+            const header = "annotation,x,y,width,height\n";
+            const rows = annotations.map(a => 
+                `"${a.name}",${Math.round(a.x)},${Math.round(a.y)},${Math.round(a.width)},${Math.round(a.height)}`
+            ).join("\n");
+
+            const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(header + rows);
+            const link = document.createElement("a");
+            link.setAttribute("href", csvContent);
+            link.setAttribute("download", "annotations.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+    </script>
+</body>
+</html>
