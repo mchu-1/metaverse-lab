@@ -3,23 +3,439 @@
   <head>
     <meta charset="utf-8" />
     <title>Network Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <meta name="description" content="Network Lab - 360 View" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
-      /* Ensure the scene takes up the full viewport */
-      html,
-      body {
+      /* ========================================
+         DESIGN TOKENS
+         ======================================== */
+      :root {
+        --glass-bg: rgba(15, 15, 25, 0.7);
+        --glass-bg-light: rgba(255, 255, 255, 0.05);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --glass-border-hover: rgba(255, 255, 255, 0.2);
+        
+        --accent-primary: #8b5cf6;
+        --accent-success: #22c55e;
+        --accent-info: #3b82f6;
+        --accent-error: #ef4444;
+        --accent-glow: rgba(139, 92, 246, 0.4);
+        
+        --text-primary: rgba(255, 255, 255, 0.95);
+        --text-secondary: rgba(255, 255, 255, 0.6);
+        --text-muted: rgba(255, 255, 255, 0.4);
+        
+        --blur-strength: 20px;
+        --transition-fast: 150ms ease;
+        --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      /* ========================================
+         BASE STYLES
+         ======================================== */
+      * {
+        box-sizing: border-box;
+      }
+      
+      html, body {
         height: 100%;
         margin: 0;
         padding: 0;
         overflow: hidden;
-        background-color: #000;
+        background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+
+      /* ========================================
+         LOADING SCREEN
+         ======================================== */
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+        transition: opacity 0.6s ease, visibility 0.6s ease;
+      }
+
+      #loading-screen.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .loader-ring {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 2px solid var(--glass-border);
+        border-top-color: var(--accent-primary);
+        animation: spin 1s linear infinite;
+      }
+
+      .loader-text {
+        margin-top: 24px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* ========================================
+         WELCOME OVERLAY
+         ======================================== */
+      #welcome-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+      }
+
+      #welcome-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .welcome-card {
+        max-width: 400px;
+        padding: 32px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        backdrop-filter: blur(var(--blur-strength));
+        text-align: center;
+        transform: translateY(20px) scale(0.95);
+        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+      }
+
+      #welcome-overlay.visible .welcome-card {
+        transform: translateY(0) scale(1);
+      }
+
+      .welcome-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-info));
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 16px -4px var(--accent-glow);
+      }
+
+      .welcome-icon svg {
+        width: 28px;
+        height: 28px;
+        color: white;
+      }
+
+      .welcome-title {
+        margin: 0 0 8px;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--text-primary);
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+
+      .welcome-subtitle {
+        margin: 0 0 28px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text-secondary);
+      }
+
+      .welcome-btn {
+        width: 100%;
+        padding: 16px 32px;
+        background: linear-gradient(135deg, var(--accent-primary), #7c3aed);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+      }
+
+      .welcome-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px var(--accent-glow);
+      }
+
+      .welcome-btn:active {
+        transform: translateY(0);
+      }
+
+      /* ========================================
+         CONTROL DOCK
+         ======================================== */
+      #ui-controls {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        backdrop-filter: blur(var(--blur-strength));
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+
+      .ui-btn {
+        position: relative;
+        width: 44px;
+        height: 44px;
+        background: var(--glass-bg-light);
+        border: 1px solid transparent;
+        border-radius: 18px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all var(--transition-smooth);
+        overflow: hidden;
+      }
+
+      .ui-btn::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, var(--accent-primary), transparent 70%);
+        opacity: 0;
+        transition: opacity var(--transition-smooth);
+      }
+
+      .ui-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: var(--glass-border-hover);
+        color: var(--text-primary);
+        transform: translateY(-2px);
+      }
+
+      .ui-btn:hover::before {
+        opacity: 0.15;
+      }
+
+      .ui-btn:active {
+        transform: translateY(0) scale(0.95);
+      }
+
+      .ui-btn svg {
+        width: 22px;
+        height: 22px;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Divider */
+      .dock-divider {
+        width: 1px;
+        height: 28px;
+        background: var(--glass-border);
+        margin: 0 4px;
+      }
+
+      /* ========================================
+         CONNECT BUTTON STATES
+         ======================================== */
+      #btn-connect {
+        width: 52px;
+        height: 52px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, var(--accent-primary), #6d28d9);
+        border: none;
+        color: white;
+        box-shadow: 0 4px 12px var(--accent-glow);
+      }
+
+      #btn-connect:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 20px var(--accent-glow);
+      }
+
+      #btn-connect.listening {
+        background: linear-gradient(135deg, var(--accent-success), #16a34a);
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        animation: pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+
+      #btn-connect.speaking {
+        background: linear-gradient(135deg, var(--accent-info), #2563eb);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      }
+
+      @keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+        70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+      }
+
+      /* Sound Wave Animation */
+      .sound-wave {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+      }
+
+      #btn-connect.speaking .sound-wave {
+        opacity: 1;
+      }
+
+      #btn-connect.speaking #icon-mic-on {
+        display: none !important;
+      }
+
+      .sound-wave span {
+        width: 3px;
+        height: 12px;
+        background: white;
+        border-radius: 2px;
+        animation: wave 0.8s ease-in-out infinite;
+      }
+
+      .sound-wave span:nth-child(1) { animation-delay: 0s; }
+      .sound-wave span:nth-child(2) { animation-delay: 0.1s; }
+      .sound-wave span:nth-child(3) { animation-delay: 0.2s; }
+      .sound-wave span:nth-child(4) { animation-delay: 0.1s; }
+      .sound-wave span:nth-child(5) { animation-delay: 0s; }
+
+      @keyframes wave {
+        0%, 100% { height: 8px; }
+        50% { height: 20px; }
+      }
+
+      /* Google Sign-In Styling */
+      #google-signin-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* ========================================
+         STATUS INDICATOR
+         ======================================== */
+      #status-indicator {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        padding: 6px 16px;
+        background: rgba(15, 15, 25, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 100px;
+        backdrop-filter: blur(var(--blur-strength));
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        visibility: hidden;
+        transition: all var(--transition-smooth);
+      }
+
+      #status-indicator.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent-success);
+        animation: blink 2s ease-in-out infinite;
+      }
+
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      .status-text {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        letter-spacing: 0.2px;
+      }
+
+      /* ========================================
+         ACCESSIBILITY (HIDDEN)
+         ======================================== */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
     </style>
   </head>
   <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loader-ring"></div>
+      <div class="loader-text">Entering the Metaverse...</div>
+    </div>
+
+    <!-- Welcome Overlay -->
+    <div id="welcome-overlay">
+      <div class="welcome-card">
+        <div class="welcome-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h2 class="welcome-title">Network Lab</h2>
+        <p class="welcome-subtitle">Explore an automated molecular biology facility. Use your voice to interact with the AI assistant.</p>
+        <button class="welcome-btn" id="btn-enter">Enter Metaverse</button>
+      </div>
+    </div>
+
+    <!-- Status Indicator -->
+    <div id="status-indicator">
+      <div class="status-dot"></div>
+      <span class="status-text">AI Connected</span>
+    </div>
+
     <!-- 
       vr-mode-ui="enabled: true" enables the VR button.
       device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
@@ -42,31 +458,36 @@
     </a-scene>
     <div id="ui-controls">
       <!-- Google Sign-In Container -->
-      <!-- Google Sign-In Container -->
       <div id="google-signin-btn"></div>
 
       <button id="btn-fullscreen" class="ui-btn" aria-label="Toggle Fullscreen">
-        <svg viewBox="0 0 24 24" width="24" height="24">
+        <svg viewBox="0 0 24 24">
           <path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
         </svg>
       </button>
+      
       <button id="btn-reset" class="ui-btn" aria-label="Reset View">
-        <svg viewBox="0 0 24 24" width="24" height="24">
+        <svg viewBox="0 0 24 24">
           <path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
         </svg>
       </button>
       
-      <!-- Connect Logic -->
+      <div class="dock-divider"></div>
+      
+      <!-- Connect Button with States -->
       <button id="btn-connect" class="ui-btn" aria-label="Connect to Agent" style="display: none;">
-        <svg id="icon-mic-off" viewBox="0 0 24 24" width="24" height="24">
-            <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
-            <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        <svg id="icon-mic-off" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
-         <svg id="icon-mic-on" viewBox="0 0 24 24" width="24" height="24" style="display:none; color: #4CAF50;">
-            <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
-            <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-            <circle cx="18" cy="5" r="3" fill="#4CAF50"/>
+        <svg id="icon-mic-on" viewBox="0 0 24 24" style="display:none;">
+          <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
+        <!-- Sound Wave Animation -->
+        <div class="sound-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
       </button>
     </div>
 
@@ -205,8 +626,63 @@
       const iconMicOff = document.getElementById('icon-mic-off');
       const iconMicOn = document.getElementById('icon-mic-on');
       
+      // New UI Elements
+      const loadingScreen = document.getElementById('loading-screen');
+      const welcomeOverlay = document.getElementById('welcome-overlay');
+      const btnEnter = document.getElementById('btn-enter');
+      const statusIndicator = document.getElementById('status-indicator');
+      
       const scene = document.querySelector('a-scene');
       const cameraEntity = document.querySelector('[camera]');
+
+      // ========================================
+      // LOADING & WELCOME FLOW
+      // ========================================
+      
+      // Handle A-Frame scene loaded
+      scene.addEventListener('loaded', () => {
+        // Hide loading screen with smooth transition
+        setTimeout(() => {
+          loadingScreen.classList.add('hidden');
+          // Show welcome overlay
+          setTimeout(() => {
+            welcomeOverlay.classList.add('visible');
+          }, 300);
+        }, 500);
+      });
+
+      // Handle Enter button
+      btnEnter.addEventListener('click', () => {
+        welcomeOverlay.classList.remove('visible');
+      });
+
+      // ========================================
+      // STATUS INDICATOR HELPERS
+      // ========================================
+      
+      function showStatus(text) {
+        statusIndicator.querySelector('.status-text').textContent = text;
+        statusIndicator.classList.add('visible');
+      }
+
+      function hideStatus() {
+        statusIndicator.classList.remove('visible');
+      }
+
+      // ========================================
+      // AI STATE FEEDBACK
+      // ========================================
+      
+      function setAIState(state) {
+        // Remove all state classes
+        btnConnect.classList.remove('listening', 'speaking');
+        
+        if (state === 'listening') {
+          btnConnect.classList.add('listening');
+        } else if (state === 'speaking') {
+          btnConnect.classList.add('speaking');
+        }
+      }
 
       // State
       let isConnected = false;
@@ -428,9 +904,11 @@
             // 1. Initialize Audio Output
             await audioPlayer.initialize();
 
-            // 2. Connect generic callback
+            // 2. Connect generic callback with AI state feedback
             liveClient.onAudio = (data) => {
                 audioPlayer.addPCM16(data);
+                // Show speaking state when AI is outputting audio
+                setAIState('speaking');
             };
 
             liveClient.onClose = () => {
@@ -440,15 +918,23 @@
             // Handle Interruption Signal
             window.addEventListener('gemini-interrupted', () => {
                 if (audioPlayer) audioPlayer.clear();
+                // Return to listening state when interrupted
+                setAIState('listening');
             });
 
             // 3. Build System Instruction with Context
-            const reason = document.getElementById('reason-content').innerText;
-            const equip = document.getElementById('equipment-list').innerText;
-            const legal = document.getElementById('legal-list').innerText;
-            const annotations = document.getElementById('annotations-list').innerText;
+            let objectMapContext = "";
+            if (window.labAnnotations) {
+                const W = 1024;
+                const H = 506;
+                const mapLines = window.labAnnotations.map(item => {
+                    const cx = (parseFloat(item.x) + parseFloat(item.width) / 2) / W;
+                    const cy = (parseFloat(item.y) + parseFloat(item.height) / 2) / H;
+                    return `- ${item.annotation}: x=${cx.toFixed(3)}, y=${cy.toFixed(3)}`;
+                });
+                objectMapContext = `\n\nKNOWN LOCATIONS (Use these coordinates for 'look_at' tool):\n${mapLines.join('\n')}`;
+            }
 
-            // We construct a prompt that prepares the agent
             const instructions = `
 You are an intelligent AI lab assistant in the 'Network Lab'. 
 You have access to the user's focus of attention via system messages I will send you.
@@ -456,18 +942,7 @@ You can also use the get_visual_context tool to take a photo of what the user is
 When I send "CONTEXT: User is looking at [Object Name]", you should be aware of it.
 If the object is interesting or the user dwells on it, you can offer a brief, interesting fact or description.
 Don't be too chatty. Be helpful, concise, and professional.
-
-Context Data:
-${reason}
-
-Equipment List:
-${equip}
-
-Legal Requirements:
-${legal}
-
-Known Annotations/Locations:
-${annotations}
+${objectMapContext}
             `;
 
             // 4. Connect WebSocket
@@ -484,6 +959,9 @@ ${annotations}
             iconMicOff.style.display = 'none';
             iconMicOn.style.display = 'block';
             
+            // Show connected status
+            showStatus('AI Connected');
+            setAIState('listening');
             
             // Start Gaze Loop
             startGazeTracking();
@@ -510,6 +988,10 @@ ${annotations}
         btnConnect.style.opacity = '1';
         iconMicOff.style.display = 'block';
         iconMicOn.style.display = 'none';
+        
+        // Reset AI state and hide status
+        setAIState('idle');
+        hideStatus();
         
         stopGazeTracking();
         stopSpeechLogger();
@@ -671,72 +1153,12 @@ ${annotations}
           }
       }
     </script>
-    <style>
-      #ui-controls {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        z-index: 1000;
-        display: flex;
-        gap: 10px;
-      }
-      
-      .ui-btn {
-        background: rgba(20, 20, 20, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        color: white;
-        padding: 10px;
-        cursor: pointer;
-        backdrop-filter: blur(4px);
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .ui-btn:hover {
-        background: rgba(20, 20, 20, 0.8);
-        transform: translateY(-2px);
-      }
-      
-      .ui-btn:active {
-        transform: translateY(0);
-      }
-
-      /* Accessibility Tree (Visually Hidden) */
-      .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-
-    </style>
 
     <!-- Hidden Accessibility Layer for AI Agents -->
     <div id="accessibility-tree" class="visually-hidden" aria-hidden="false">
-      <section id="env-reason" aria-labelledby="reason-title">
-        <h1 id="reason-title">Environment Purpose</h1>
-        <div id="reason-content"></div>
-      </section>
-      <section id="env-equipment" aria-labelledby="equipment-title">
-        <h2 id="equipment-title">Laboratory Equipment</h2>
-        <div id="equipment-list"></div>
-      </section>
       <section id="env-annotations" aria-labelledby="annotations-title">
         <h2 id="annotations-title">Annotated Objects</h2>
         <div id="annotations-list"></div>
-      </section>
-      <section id="env-legal" aria-labelledby="legal-title">
-        <h2 id="legal-title">Legal & Compliance</h2>
-        <div id="legal-list"></div>
       </section>
     </div>
 
@@ -748,29 +1170,6 @@ ${annotations}
       // Load and inject metadata
       async function loadMetadata() {
         try {
-          // Load Reason
-          const reasonRes = await fetch('reason.txt');
-          if (reasonRes.ok) {
-            const reasonText = await reasonRes.text();
-            document.getElementById('reason-content').innerText = reasonText;
-          }
-
-          // Load Equipment
-          const equipRes = await fetch('equipment.csv');
-          if (equipRes.ok) {
-            const csvText = await equipRes.text();
-            const equipmentData = parseCSV(csvText);
-            renderTable(equipmentData, 'equipment-list');
-          }
-
-          // Load Legal
-          const legalRes = await fetch('legal.csv');
-          if (legalRes.ok) {
-            const legalText = await legalRes.text();
-            const legalData = parseCSV(legalText);
-            renderTable(legalData, 'legal-list');
-          }
-
           // Load Annotations
           const annRes = await fetch('annotations.csv');
           if (annRes.ok) {
