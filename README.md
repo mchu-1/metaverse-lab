@@ -1,1 +1,1 @@
-🌐 **The Network Lab.**
+THE NETWORK LAB 🌐
