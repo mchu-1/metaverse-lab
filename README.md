@@ -1,1 +1,1 @@
-🌐 **The Network Lab**<sup>(C)</sup>
+🌐 **The Network Lab**<sup>&reg</sup>
