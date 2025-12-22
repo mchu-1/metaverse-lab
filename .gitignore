@@ -18,4 +18,4 @@ __pycache__/
 
 # Style references
 styles/
-dist/
+# dist/ - Committed for production (contains fx.js transition bundle)
