@@ -446,11 +446,7 @@ export class LiveClient {
             }]
           };
 
-                  }
-                }
-              ]
-            }]
-          };
+
 
           try {
               const response = await fetch(url, {
