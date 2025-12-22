@@ -32,10 +32,13 @@
           </svg>
         </div>
         <h2 class="welcome-title">The Network Lab</h2>
-        <p class="welcome-subtitle">Explore an automated molecular biology facility. Sign in to access the AI control systems.</p>
+        <p class="welcome-subtitle">Explore an immersive 360° molecular biology facility with an AI-powered guide.</p>
         
-        <!-- Google Sign-In Container (Moved here) -->
-        <div id="google-signin-btn" style="min-height: 48px; display: flex; justify-content: center; margin-top: 16px;"></div>
+        <!-- Enter World Button -->
+        <button id="btn-enter-world" class="welcome-btn enter-world-btn">
+          <span class="btn-text">Enter world</span>
+          <span class="btn-glow"></span>
+        </button>
       </div>
     </div>
 
@@ -101,7 +104,7 @@
     </div>
 
     <!-- Debug Console Overlay -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
 
 
 
@@ -137,114 +140,40 @@
     <script type="module">
       import { LiveClient } from './live-client.js';
       import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
-      import { GEMINI_API_KEY, GOOGLE_CLIENT_ID } from './config.js';
+      import { GEMINI_API_KEY } from './config.js';
 
       const appStartTime = Date.now();
 
-      window.handleCredentialResponse = (response) => {
-        try {
-            const base64Url = response.credential.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-            
-            const payload = JSON.parse(jsonPayload);
-            
-            if (payload.email === 'hello@mchu.bio' && payload.email_verified) {
-                console.log("Logged in as:", payload.email);
-                
-                // Log to backend
-                fetch('/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: payload.email,
-                        name: payload.name
-                    })
-                }).catch(err => console.error("Failed to log login:", err));
 
-                
-                // Transition Flow:
-                // 1. Hide Welcome Overlay
-                const welcomeOverlay = document.getElementById('welcome-overlay');
-                if (welcomeOverlay) welcomeOverlay.classList.remove('visible');
-                
-                // 2. Show Loading Screen
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) {
-                    loadingScreen.classList.remove('hidden');
-                    loadingScreen.style.display = 'flex';
-                    loadingScreen.style.opacity = '1';
-                    loadingScreen.style.visibility = 'visible';
-                }
 
-                // 3. Wait for scene and enter
-                // We check if scene is already ready, otherwise onSceneReady will handle it 
-                // BUT we need to flag that we are authorized to enter.
-                window.isAuthorized = true;
-                
-                // If scene was already waiting (or loaded), trigger transition
-                checkSceneAndEnter();
-
-                // Unlock Interface (but keep hidden until scene load)
-                // document.getElementById('btn-connect').style.display = 'flex';
-                
-                // Set the key for connectAgent to use
-                window.labControl.authorizedKey = GEMINI_API_KEY;
-                
-                // alert(`Welcome ${payload.name}! Agent Access Granted.`);
-            } else {
-                alert("Access Denied: " + payload.email);
-            }
-        } catch (e) {
-            console.error("Auth Error", e);
-        }
-      };
-
-      // Initialize Google Sign-In
-      // Wait for library to load
-      let gsiAttempts = 0;
-      const checkGSI = setInterval(() => {
-        gsiAttempts++;
-        if (window.google && window.google.accounts) {
-          clearInterval(checkGSI);
-          try {
-              initializeGSI();
-          } catch(e) {
-              console.error("GSI Init Error:", e);
-              alert("Google Sign-In Error: " + e.message);
-          }
-        }
-        
-        // Timeout after 5 seconds
-        if (gsiAttempts > 50) {
-             clearInterval(checkGSI);
-             console.error("GSI Script timed out.");
-             // Fallback logic
-             const btn = document.getElementById('google-signin-btn');
-             if(btn) {
-                btn.innerText = "Sign-In Failed (Script Timeout). Check Console.";
-                btn.style.color = "red";
-             }
-        }
-      }, 100);
-
-      function initializeGSI() {
-          if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) {
-              alert("Configuration Error: Missing Google Client ID in config.js");
-              return;
-          }
-
-          google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredentialResponse
-          });
+      // Initialize "Enter World" Button
+      const btnEnterWorld = document.getElementById('btn-enter-world');
+      if (btnEnterWorld) {
+        btnEnterWorld.addEventListener('click', () => {
+          console.log("Entering world...");
           
-          google.accounts.id.renderButton(
-            document.getElementById("google-signin-btn"),
-            { theme: "filled_black", type: "icon", shape: "circle", size: "large" } 
-          );
+          // 1. Hide Welcome Overlay
+          const welcomeOverlay = document.getElementById('welcome-overlay');
+          if (welcomeOverlay) welcomeOverlay.classList.remove('visible');
+          
+          // 2. Show Loading Screen
+          const loadingScreen = document.getElementById('loading-screen');
+          if (loadingScreen) {
+            loadingScreen.classList.remove('hidden');
+            loadingScreen.style.display = 'flex';
+            loadingScreen.style.opacity = '1';
+            loadingScreen.style.visibility = 'visible';
+          }
+
+          // 3. Set authorization flag and trigger entry
+          window.isAuthorized = true;
+          
+          // Set the key for connectAgent to use
+          window.labControl.authorizedKey = GEMINI_API_KEY;
+          
+          // If scene was already loaded, trigger transition
+          checkSceneAndEnter();
+        });
       }
 
       // UI Logic
