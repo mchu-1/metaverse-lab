@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="index.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   </head>
   <body>
@@ -24,35 +25,22 @@
     <!-- Welcome Overlay -->
     <div id="welcome-overlay">
       <div class="welcome-card">
-        <div class="welcome-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <h2 class="welcome-title">The Network Lab</h2>
-        <p class="welcome-subtitle">Explore an immersive 360° molecular biology facility with an AI-powered guide.</p>
-        
-        <!-- Enter World Button -->
-        <button id="btn-enter-world" class="welcome-btn enter-world-btn">
-          <span class="btn-text">Enter world</span>
-          <span class="btn-glow"></span>
-        </button>
+        <h2 class="welcome-title">🌐 The Network Lab</h2>
+        <p class="welcome-subtitle">Welcome to science <span class="gradient-text">in the cloud</span> ☁️ <span id="btn-enter-world" class="enter-link">enter <span class="enter-arrow">→</span></span></p>
       </div>
     </div>
 
     <!-- Status Indicator -->
     <div id="status-indicator">
       <div class="status-dot"></div>
-      <span class="status-text">AI Connected</span>
+      <span class="status-text">ONLINE</span>
     </div>
 
     <!-- 
       vr-mode-ui="enabled: true" enables the VR button.
       device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
     -->
-    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" renderer="colorManagement: true; preserveDrawingBuffer: true;">
+    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" renderer="colorManagement: true; preserveDrawingBuffer: true;" embedded style="opacity: 0; visibility: hidden; transition: opacity 0.5s ease;">
       <a-assets>
         <img id="sky" src="nslab-world.png" />
       </a-assets>
@@ -69,25 +57,8 @@
       ></a-entity>
     </a-scene>
     <div id="ui-controls">
-      <!-- Google Sign-In Container -->
-      <!-- Google Sign-In Container Removed from Dock -->
-
-      <button id="btn-fullscreen" class="ui-btn" aria-label="Toggle Fullscreen">
-        <svg viewBox="0 0 24 24">
-          <path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-        </svg>
-      </button>
-      
-      <button id="btn-reset" class="ui-btn" aria-label="Reset View">
-        <svg viewBox="0 0 24 24">
-          <path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
-        </svg>
-      </button>
-      
-      <div class="dock-divider"></div>
-      
       <!-- Connect Button with States -->
-      <button id="btn-connect" class="ui-btn" aria-label="Connect to Agent">
+      <button id="btn-connect" class="ui-btn" aria-label="Connect to Laboratory Guide">
         <svg id="icon-mic-off" viewBox="0 0 24 24">
           <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -141,44 +112,86 @@
       import { LiveClient } from './live-client.js';
       import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
       import { GEMINI_API_KEY } from './config.js';
+      import { mountWorldTransition } from './dist/world-transition.js';
 
       const appStartTime = Date.now();
 
+      // Persist "enter" link after first hover on welcome card
+      const welcomeCard = document.querySelector('.welcome-card');
+      const enterLink = document.getElementById('btn-enter-world');
+      if (welcomeCard && enterLink) {
+        welcomeCard.addEventListener('mouseenter', () => {
+          enterLink.classList.add('revealed');
+        }, { once: true });
+      }
 
-
-      // Initialize "Enter World" Button
+      // Initialize "Enter World" Button with Voxel Wave Transition
       const btnEnterWorld = document.getElementById('btn-enter-world');
       if (btnEnterWorld) {
-        btnEnterWorld.addEventListener('click', () => {
-          console.log("Entering world...");
+        btnEnterWorld.addEventListener('click', async () => {
+          console.log("Entering world with voxel wave transition...");
           
-          // 1. Hide Welcome Overlay
           const welcomeOverlay = document.getElementById('welcome-overlay');
-          if (welcomeOverlay) welcomeOverlay.classList.remove('visible');
           
-          // 2. Show Loading Screen
-          const loadingScreen = document.getElementById('loading-screen');
-          if (loadingScreen) {
-            loadingScreen.classList.remove('hidden');
-            loadingScreen.style.display = 'flex';
-            loadingScreen.style.opacity = '1';
-            loadingScreen.style.visibility = 'visible';
-          }
-
-          // 3. Set authorization flag and trigger entry
+          // 1. Set authorization flag early
           window.isAuthorized = true;
-          
-          // Set the key for connectAgent to use
+          window.isEnteringWorld = true; // Prevent welcome overlay from re-appearing
           window.labControl.authorizedKey = GEMINI_API_KEY;
           
-          // If scene was already loaded, trigger transition
-          checkSceneAndEnter();
+          // 2. Create and run the voxel wave transition (React Three Fiber + GSAP)
+          // NOTE: Don't hide welcome overlay yet - wait for onReady callback
+          try {
+            mountWorldTransition({
+              container: document.body,
+              textureUrl: '/nslab-world.png',
+              duration: 4500,       // 4.5 seconds for main wave animation
+              fadeOutDuration: 1200, // 1.2 seconds fade to reveal world
+              gridSize: 110,        // 110x110 = 12,100 particles
+              onReady: () => {
+                console.log("Transition ready, hiding welcome overlay...");
+                // NOW hide the welcome overlay - transition is ready to display
+                if (welcomeOverlay) {
+                  welcomeOverlay.style.transition = 'none';
+                  welcomeOverlay.classList.remove('visible');
+                  welcomeOverlay.style.display = 'none';
+                }
+              },
+              onComplete: () => {
+                console.log("Transition complete, revealing metaverse...");
+                
+                // Reveal the A-Frame scene
+                const sceneEl = document.querySelector('a-scene');
+                if (sceneEl) {
+                  sceneEl.style.opacity = '1';
+                  sceneEl.style.visibility = 'visible';
+                }
+                
+                // Mark scene as entered
+                window.isSceneLoaded = true;
+              }
+            });
+            
+          } catch (error) {
+            console.error("Transition failed, falling back to standard entry:", error);
+            
+            // Fallback: hide welcome and show loading screen, enter normally
+            if (welcomeOverlay) {
+              welcomeOverlay.style.display = 'none';
+            }
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+              loadingScreen.classList.remove('hidden');
+              loadingScreen.style.display = 'flex';
+              loadingScreen.style.opacity = '1';
+              loadingScreen.style.visibility = 'visible';
+            }
+            
+            checkSceneAndEnter();
+          }
         });
       }
 
       // UI Logic
-      const btnFullscreen = document.getElementById('btn-fullscreen');
-      const btnReset = document.getElementById('btn-reset');
       const btnConnect = document.getElementById('btn-connect');
       const iconMicOff = document.getElementById('icon-mic-off');
       const iconMicOn = document.getElementById('icon-mic-on');
@@ -204,9 +217,12 @@
       
       window.isAuthorized = false;
       window.isSceneLoaded = false;
+      window.isEnteringWorld = false; // Flag to prevent welcome overlay from re-appearing
 
-      // Force Welcome Overlay Visible Initially
-      welcomeOverlay.classList.add('visible');
+      // Force Welcome Overlay Visible Initially (only if not already entering)
+      if (!window.isEnteringWorld) {
+        welcomeOverlay.classList.add('visible');
+      }
 
       function checkSceneAndEnter() {
          if (window.isAuthorized && window.isSceneLoaded) {
@@ -218,10 +234,15 @@
          console.log("Entering Metaverse...");
          
          const loadingScreen = document.getElementById('loading-screen');
+         const sceneEl = document.querySelector('a-scene');
          
-         // Minimum load time for effect? Maybe not needed if they just spent time logging in.
-         // Let's just give it a small beat for the 'Loading Environment' text to register if it just appeared.
+         // Reveal the scene (was hidden to prevent flash)
+         if (sceneEl) {
+           sceneEl.style.opacity = '1';
+           sceneEl.style.visibility = 'visible';
+         }
          
+         // Fade out loading screen after brief delay
          setTimeout(() => {
             if (loadingScreen) {
                 loadingScreen.classList.add('hidden');
@@ -439,18 +460,6 @@
           }
       };
 
-      btnFullscreen.addEventListener('click', () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen();
-        } else {
-          if (document.exitFullscreen) document.exitFullscreen();
-        }
-      });
-
-      btnReset.addEventListener('click', () => {
-         window.labControl.reset();
-      });
-
       // --- 2. Live Agent Logic ---
 
       btnConnect.addEventListener('click', async () => {
@@ -584,7 +593,7 @@ ${objectMapContext}
             iconMicOn.style.display = 'block';
             
             // Show connected status
-            showStatus('AI Connected');
+            showStatus('ONLINE');
             setAIState('listening');
             
             // Start Gaze Loop
@@ -603,6 +612,8 @@ ${objectMapContext}
       function disconnectAgent() {
         isConnected = false;
         if (liveClient) liveClient.disconnect();
+
+        if (audioPlayer) audioPlayer.clear(); // Silence immediately
         if (audioRecorder) audioRecorder.stop();
         
         liveClient = null;
