@@ -25,7 +25,7 @@ export interface TimelineState {
   fadeOut: number;
 }
 
-export function useTransitionTimeline(config: TimelineConfig) {
+export function useTimeline(config: TimelineConfig) {
   const { duration, fadeOutDuration, onComplete, onUpdate } = config;
   
   const stateRef = useRef<TimelineState>({

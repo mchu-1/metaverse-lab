@@ -10,7 +10,7 @@ import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import { useTransitionTimeline } from './useTransitionTimeline';
+import { useTimeline } from './timeline';
 import type { WorldTransitionProps } from './types';
 
 // Import shaders as raw strings
@@ -122,7 +122,7 @@ function VoxelParticles({
   );
   
   // Setup GSAP timeline
-  const { start, getState } = useTransitionTimeline({
+  const { start, getState } = useTimeline({
     duration: duration / 1000, // Convert to seconds for GSAP
     fadeOutDuration: fadeOutDuration / 1000,
     onComplete,

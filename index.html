@@ -42,7 +42,7 @@
     -->
     <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" renderer="colorManagement: true; preserveDrawingBuffer: true;" embedded style="opacity: 0; visibility: hidden; transition: opacity 0.5s ease;">
       <a-assets>
-        <img id="sky" src="nslab-world.png" />
+        <img id="sky" src="world.png" />
       </a-assets>
 
       <!-- 360 Sky Sphere -->
@@ -112,7 +112,7 @@
       import { LiveClient } from './live-client.js';
       import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
       import { GEMINI_API_KEY } from './config.js';
-      import { mountWorldTransition } from './dist/world-transition.js';
+      import { mountWorldTransition } from './dist/fx.js';
 
       const appStartTime = Date.now();
 
@@ -143,7 +143,7 @@
           try {
             mountWorldTransition({
               container: document.body,
-              textureUrl: '/nslab-world.png',
+              textureUrl: '/world.png',
               duration: 4500,       // 4.5 seconds for main wave animation
               fadeOutDuration: 1200, // 1.2 seconds fade to reveal world
               gridSize: 110,        // 110x110 = 12,100 particles
@@ -550,7 +550,7 @@
 
             const instructions = `
 You are an intelligent AI lab assistant in the 'Network Lab'.
-You have been provided with a 360-degree equirectangular map of the environment (nslab-world.png) in your visual context.
+You have been provided with a 360-degree equirectangular map of the environment (world.png) in your visual context.
 You can "see" the entire room.
 You have access to the user's focus of attention via system messages I will send you.
 You can also use the get_visual_context tool to take a photo of what the user is seeing and get a description. Use this when the user asks "What do I see?" or "Describe this".
@@ -566,7 +566,7 @@ ${objectMapContext}
 
             // 4.5 Inject Visual Context (Map)
             try {
-               const resp = await fetch('nslab-world.png');
+               const resp = await fetch('world.png');
                const blob = await resp.blob();
                const buffer = await blob.arrayBuffer();
                const bytes = new Uint8Array(buffer);

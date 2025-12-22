@@ -18,9 +18,9 @@ export default defineConfig({
   build: {
     // Build the transition as a standalone bundle that can be loaded into index.html
     lib: {
-      entry: resolve(__dirname, 'src/transition/index.tsx'),
+      entry: resolve(__dirname, 'src/fx/index.tsx'),
       name: 'WorldTransition',
-      fileName: 'world-transition',
+      fileName: 'fx',
       formats: ['es'],
     },
     rollupOptions: {

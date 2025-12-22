@@ -6,7 +6,7 @@
  */
 
 import { createPortal } from 'react-dom';
-import { WorldTransition } from './WorldTransition';
+import { WorldTransition } from './main';
 import type { TransitionOverlayProps } from './types';
 
 export function TransitionOverlay({
@@ -21,7 +21,7 @@ export function TransitionOverlay({
   
   return createPortal(
     <WorldTransition
-      textureUrl="/nslab-world.png"
+      textureUrl="/world.png"
       duration={4500}
       fadeOutDuration={1200}
       gridSize={110}

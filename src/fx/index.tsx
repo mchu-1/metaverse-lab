@@ -6,8 +6,8 @@
  */
 
 import { createRoot, Root } from 'react-dom/client';
-import { WorldTransition } from './WorldTransition';
-import { TransitionOverlay } from './TransitionOverlay';
+import { WorldTransition } from './main';
+import { TransitionOverlay } from './overlay';
 import type { WorldTransitionProps, TransitionOverlayProps } from './types';
 
 // Re-export components for React users
