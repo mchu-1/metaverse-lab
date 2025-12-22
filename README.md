@@ -1,3 +1,3 @@
 🌐 **The Network Lab**
 
-Welcome to the cloud ☁️
+Welcome to science *in the cloud* ☁️
