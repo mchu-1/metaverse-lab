@@ -151,6 +151,7 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
   top: 0;
   left: 0;
   z-index: 2000;
@@ -158,11 +159,14 @@ body {
   align-items: center;
   justify-content: flex-start;
   padding-left: 10%;
+  padding-right: 5%;
   background: #000000;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.5s var(--transition-smooth),
     visibility 0.5s var(--transition-smooth);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 #welcome-overlay.visible {
@@ -171,7 +175,7 @@ body {
 }
 
 .welcome-card {
-  max-width: 560px;
+  max-width: min(560px, 85vw); /* Responsive max-width for mobile */
   width: 100%;
   padding: var(--space-2xl) 0;
   background: transparent;
@@ -193,20 +197,24 @@ body {
 .welcome-title {
   margin: 0 0 var(--space-md);
   font-family: var(--font-serif);
-  font-size: 52px;
+  font-size: clamp(28px, 8vw, 52px); /* Responsive font size */
   font-weight: 500;
   color: #ffffff;
   letter-spacing: -0.02em;
   line-height: 1.1;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .welcome-subtitle {
   margin: 0 0 var(--space-xl);
   font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  font-size: 18px;
+  font-size: clamp(14px, 4vw, 18px); /* Responsive font size */
   font-weight: 400;
   line-height: 1.6;
   color: #a0a0a0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Keyword highlighting - subtle accent */

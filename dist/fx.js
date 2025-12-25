@@ -54211,10 +54211,19 @@ void main() {
   // Alpha: visible from phase 1
   vAlpha = dotAlpha;
   
-  // Position
+  // Position - Cover full viewport on all aspect ratios
   vec2 basePos = (aGridPos - 0.5) * 2.0;
   float aspect = uResolution.x / uResolution.y;
-  basePos.x *= aspect;
+  
+  // Always scale to COVER the viewport (not fit inside it)
+  // This ensures no black bars on any aspect ratio
+  if (aspect > 1.0) {
+    // Landscape: scale Y to match wider X
+    basePos.y *= aspect;
+  } else {
+    // Portrait/Mobile: scale X to match taller Y (multiply, not divide)
+    basePos.x *= (1.0 / aspect);
+  }
   
   // Add undulation displacement during phase 2
   float yDisplacement = yWave;
