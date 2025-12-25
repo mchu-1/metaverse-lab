@@ -250,8 +250,8 @@ body {
 }
 
 .welcome-subtitle .enter-link {
-  display: block;
-  margin-top: var(--space-md);
+  display: inline; /* Desktop: inline with text */
+  margin-left: var(--space-sm);
   color: #4fa3d1;
   font-weight: 500;
   cursor: pointer;
@@ -260,6 +260,15 @@ body {
   transition: color var(--transition-fast);
   pointer-events: auto;
   text-align: left;
+}
+
+/* Mobile: enter link on its own line */
+@media (max-width: 768px) {
+  .welcome-subtitle .enter-link {
+    display: block;
+    margin-left: 0;
+    margin-top: var(--space-md);
+  }
 }
 
 .welcome-card:hover .enter-link,
