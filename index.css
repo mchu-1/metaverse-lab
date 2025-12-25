@@ -160,7 +160,7 @@ body {
   justify-content: flex-start;
   padding-left: 10%;
   padding-right: 5%;
-  background: #000000;
+  background: #ffffff;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.5s var(--transition-smooth),
@@ -199,7 +199,7 @@ body {
   font-family: var(--font-serif);
   font-size: clamp(28px, 8vw, 52px); /* Responsive font size */
   font-weight: 500;
-  color: #ffffff;
+  color: #000000;
   letter-spacing: -0.02em;
   line-height: 1.1;
   word-wrap: break-word;
@@ -212,37 +212,37 @@ body {
   font-size: clamp(14px, 4vw, 18px); /* Responsive font size */
   font-weight: 400;
   line-height: 1.6;
-  color: #a0a0a0;
+  color: #5f5f5f;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
 
 /* Keyword highlighting - subtle accent */
 .highlight {
-  color: #ffffff;
+  color: #000000;
   font-weight: 500;
 }
 
 .welcome-title .highlight {
-  color: #c0c0c0;
+  color: #3f3f3f;
   font-style: italic;
   background: none;
   padding: 0;
 }
 
 .welcome-subtitle .highlight {
-  color: #ffffff;
+  color: #000000;
   font-weight: 500;
 }
 
 .welcome-subtitle em {
   font-family: var(--font-serif);
   font-style: italic;
-  color: #ffffff;
+  color: #000000;
 }
 
 .welcome-subtitle .gradient-text {
-  background: linear-gradient(90deg, #ffffff 0%, #808080 100%);
+  background: linear-gradient(90deg, #000000 0%, #7f7f7f 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
