@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Network Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Network Lab - 360 View" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="index.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  </head>
+  <body>
+
+    <!-- Loading Screen -->
+    <!-- Loading Screen (Hidden by default, shown after login) -->
+    <div id="loading-screen" class="hidden">
+      <div class="loader-ring"></div>
+      <span class="loader-text">Loading Environment</span>
+    </div>
+
+    <!-- Welcome Overlay -->
+    <div id="welcome-overlay">
+      <div class="welcome-card">
+        <h2 class="welcome-title">🌐 The Network Lab</h2>
+        <p class="welcome-subtitle">Welcome to science <span class="gradient-text">in the cloud</span> ☁️ <span id="btn-enter-world" class="enter-link">enter <span class="enter-arrow">→</span></span></p>
+      </div>
+    </div>
+
+    <!-- Status Indicator -->
+    <div id="status-indicator">
+      <div class="status-dot"></div>
+      <span class="status-text">ONLINE</span>
+    </div>
+
+    <!-- 
+      vr-mode-ui="enabled: true" enables the VR button.
+      device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
+    -->
+    <a-scene vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true" renderer="colorManagement: true; preserveDrawingBuffer: true;" embedded style="opacity: 0; visibility: hidden; transition: opacity 0.5s ease;">
+      <a-assets>
+        <img id="sky" src="world.png" />
+      </a-assets>
+
+      <!-- 360 Sky Sphere -->
+      <a-sky src="#sky" rotation="0 -130 0"></a-sky>
+
+      <!-- Camera with look controls -->
+      <!-- reverseMouseDrag: true is often preferred for 360 drag interaction -->
+      <a-entity
+        camera
+        look-controls="reverseMouseDrag: true; touchEnabled: true"
+        position="0 1.6 0"
+      ></a-entity>
+    </a-scene>
+    <div id="ui-controls">
+      <!-- Connect Button with States -->
+      <button id="btn-connect" class="ui-btn" aria-label="Connect to Laboratory Guide">
+        <svg id="icon-mic-off" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+        <svg id="icon-mic-on" viewBox="0 0 24 24" style="display:none;">
+          <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+        <!-- Sound Wave Animation -->
+        <div class="sound-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </button>
+    </div>
+
+    <!-- Debug Console Overlay -->
+
+
+
+
+
+    <script>
+      // REMOTE LOGGER (UI Removed)
+      (function() {
+        // No visual console
+        
+        function sendLog(level, args) {
+            try {
+                const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+                fetch('/log', { method: 'POST', body: `[${level}] ${msg}` }).catch(e => {});
+            } catch (e) {}
+        }
+        
+        function uiLog(level, args) {
+             // 1. UI Update Removed
+             
+             // 2. Send Remote (Best Effort)
+             sendLog(level, args);
+        }
+
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        console.log = function(...args) { originalLog.apply(console, args); uiLog('INFO', args); };
+        console.warn = function(...args) { originalWarn.apply(console, args); uiLog('WARN', args); };
+        console.error = function(...args) { originalError.apply(console, args); uiLog('ERROR', args); };
+      })();
+    </script>
+    <script type="module">
+      import { LiveClient } from './live-client.js';
+      import { AudioRecorder, AudioStreamPlayer } from './audio-utils.js';
+      import { GEMINI_API_KEY } from './config.js';
+      import { mountWorldTransition } from './fx.js';
+
+      const appStartTime = Date.now();
+
+      // Persist "enter" link after first hover on welcome card
+      const welcomeCard = document.querySelector('.welcome-card');
+      const enterLink = document.getElementById('btn-enter-world');
+      if (welcomeCard && enterLink) {
+        welcomeCard.addEventListener('mouseenter', () => {
+          enterLink.classList.add('revealed');
+        }, { once: true });
+      }
+
+      // Initialize "Enter World" Button with Voxel Wave Transition
+      const btnEnterWorld = document.getElementById('btn-enter-world');
+      if (btnEnterWorld) {
+        btnEnterWorld.addEventListener('click', async () => {
+          console.log("Entering world with voxel wave transition...");
+          
+          const welcomeOverlay = document.getElementById('welcome-overlay');
+          
+          // 1. Set authorization flag early
+          window.isAuthorized = true;
+          window.isEnteringWorld = true; // Prevent welcome overlay from re-appearing
+          window.labControl.authorizedKey = GEMINI_API_KEY;
+          
+          // 2. Create and run the voxel wave transition (React Three Fiber + GSAP)
+          // NOTE: Don't hide welcome overlay yet - wait for onReady callback
+          try {
+            mountWorldTransition({
+              container: document.body,
+              textureUrl: './world.png',
+              duration: 4500,       // 4.5 seconds for main wave animation
+              fadeOutDuration: 1200, // 1.2 seconds fade to reveal world
+              gridSize: 150,        // 150x150 = 22,500 particles
+              onReady: () => {
+                console.log("Transition ready, hiding welcome overlay...");
+                // NOW hide the welcome overlay - transition is ready to display
+                if (welcomeOverlay) {
+                  welcomeOverlay.style.transition = 'none';
+                  welcomeOverlay.classList.remove('visible');
+                  welcomeOverlay.style.display = 'none';
+                }
+              },
+              onComplete: () => {
+                console.log("Transition complete, revealing metaverse...");
+                
+                // Reveal the A-Frame scene
+                const sceneEl = document.querySelector('a-scene');
+                if (sceneEl) {
+                  sceneEl.style.opacity = '1';
+                  sceneEl.style.visibility = 'visible';
+                }
+                
+                // Mark scene as entered
+                window.isSceneLoaded = true;
+              }
+            });
+            
+          } catch (error) {
+            console.error("Transition failed, falling back to standard entry:", error);
+            
+            // Fallback: hide welcome and show loading screen, enter normally
+            if (welcomeOverlay) {
+              welcomeOverlay.style.display = 'none';
+            }
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+              loadingScreen.classList.remove('hidden');
+              loadingScreen.style.display = 'flex';
+              loadingScreen.style.opacity = '1';
+              loadingScreen.style.visibility = 'visible';
+            }
+            
+            checkSceneAndEnter();
+          }
+        });
+      }
+
+      // UI Logic
+      const btnConnect = document.getElementById('btn-connect');
+      const iconMicOff = document.getElementById('icon-mic-off');
+      const iconMicOn = document.getElementById('icon-mic-on');
+      
+      // New UI Elements
+
+      const welcomeOverlay = document.getElementById('welcome-overlay');
+      // const btnEnter = document.getElementById('btn-enter');
+      const statusIndicator = document.getElementById('status-indicator');
+      const loadingScreen = document.getElementById('loading-screen');
+      
+      const scene = document.querySelector('a-scene');
+      const cameraEntity = document.querySelector('[camera]');
+
+      // ========================================
+      // LOADING & WELCOME FLOW
+      // ========================================
+      
+      // Initial State:
+      // Welcome Overlay: Visible (via CSS or JS below)
+      // Loading Screen: Hidden
+      // Scene: Loading in background
+      
+      window.isAuthorized = false;
+      window.isSceneLoaded = false;
+      window.isEnteringWorld = false; // Flag to prevent welcome overlay from re-appearing
+
+      // Force Welcome Overlay Visible Initially (only if not already entering)
+      if (!window.isEnteringWorld) {
+        welcomeOverlay.classList.add('visible');
+      }
+
+      function checkSceneAndEnter() {
+         if (window.isAuthorized && window.isSceneLoaded) {
+             enterMetaverse();
+         }
+      }
+
+      function enterMetaverse() {
+         console.log("Entering Metaverse...");
+         
+         const loadingScreen = document.getElementById('loading-screen');
+         const sceneEl = document.querySelector('a-scene');
+         
+         // Reveal the scene (was hidden to prevent flash)
+         if (sceneEl) {
+           sceneEl.style.opacity = '1';
+           sceneEl.style.visibility = 'visible';
+         }
+         
+         // Fade out loading screen after brief delay
+         setTimeout(() => {
+            if (loadingScreen) {
+                loadingScreen.classList.add('hidden');
+                setTimeout(() => { loadingScreen.style.display = 'none'; }, 500);
+            }
+         }, 800);
+      }
+      
+      function onSceneReady() {
+        console.log("Scene Ready in Background");
+        window.isSceneLoaded = true;
+        checkSceneAndEnter();
+      }
+      
+      // Safety Timeout (in case 'loaded' event never fires due to error)
+      const loadTimeout = setTimeout(() => {
+           console.warn("Scene load timeout - forcing UI unlock");
+           onSceneReady();
+      }, 4000);
+
+      // Show welcome overlay when scene is ready
+      if (scene.hasLoaded) {
+        clearTimeout(loadTimeout);
+        onSceneReady();
+      } else {
+        scene.addEventListener('loaded', () => {
+             clearTimeout(loadTimeout);
+             onSceneReady();
+        });
+      }
+
+      // Handle Enter button - REMOVED (Auto-enter on login)
+      // if (btnEnter) {
+      //   btnEnter.addEventListener('click', () => {
+      //     welcomeOverlay.classList.remove('visible');
+      //   });
+      // }
+
+      // ========================================
+      // STATUS INDICATOR HELPERS
+      // ========================================
+      
+      function showStatus(text) {
+        statusIndicator.querySelector('.status-text').textContent = text;
+        statusIndicator.classList.add('visible');
+      }
+
+      function hideStatus() {
+        statusIndicator.classList.remove('visible');
+      }
+
+      // ========================================
+      // AI STATE FEEDBACK
+      // ========================================
+      
+      function setAIState(state) {
+        // Remove all state classes
+        btnConnect.classList.remove('listening', 'speaking');
+        
+        if (state === 'listening') {
+          btnConnect.classList.add('listening');
+        } else if (state === 'speaking') {
+          btnConnect.classList.add('speaking');
+        }
+      }
+
+      // State
+      let isConnected = false;
+      let liveClient = null;
+      let audioRecorder = null;
+      let audioPlayer = null;
+      let speechRecognition = null;
+      
+      // Data (exposed for the Gaze logic)
+      let annotations = [];
+      let lastLookedAt = null;
+      let lastAnnounceTime = 0;
+
+      // EXPOSE FOR DEBUGGING
+      window.labTest = {
+          getLiveClient: () => liveClient,
+          startSpeechLogger: () => startSpeechLogger(),
+          stopSpeechLogger: () => stopSpeechLogger(),
+          setLiveClient: (client) => { liveClient = client; },
+          setIsConnected: (val) => { isConnected = val; }
+      };
+
+      // --- 1. Basic UI Handlers ---
+
+      // Global Control Interface for AI Agent
+      // Global Control Interface for AI Agent
+      window.labControl = {
+          animationRef: null,
+          
+          reset: () => {
+             window.labControl.cancelAnimation();
+             if (cameraEntity) {
+               cameraEntity.setAttribute('rotation', '0 0 0');
+               const controls = cameraEntity.components['look-controls'];
+               if (controls) {
+                 controls.pitchObject.rotation.x = 0;
+                 controls.yawObject.rotation.y = 0;
+               }
+             }
+          },
+
+          cancelAnimation: () => {
+              if (window.labControl.animationRef) {
+                  cancelAnimationFrame(window.labControl.animationRef);
+                  window.labControl.animationRef = null;
+              }
+          },
+          
+          lookAtCoordinate: (u, v, duration = 2000) => {
+             window.labControl.cancelAnimation();
+             
+             if (!cameraEntity) return;
+             const controls = cameraEntity.components['look-controls'];
+             if (!controls) return;
+
+             // 1. Current Quaternion
+             // A-Frame LookControls uses a pitchObject (X rotation) and yawObject (Y rotation)
+             // We need to combine them to get the current world quaternion (ignoring position)
+             const startYaw = controls.yawObject.rotation.y;
+             const startPitch = controls.pitchObject.rotation.x;
+             
+             const startQ = new THREE.Quaternion();
+             startQ.setFromEuler(new THREE.Euler(startPitch, startYaw, 0, 'YXZ'));
+
+             // 2. Target Quaternion from UV
+             // Map Logic: 
+             // U (0->1) map to Longitude. Skybox is rotated -130 deg around Y.
+             // V (0->1) map to Latitude (90 -> -90).
+             
+             // Skybox rotation offset (from <a-sky rotation="0 -130 0">)
+             const skyRotationOffsetDeg = -130;
+             const skyRotationOffsetRad = THREE.MathUtils.degToRad(skyRotationOffsetDeg);
+
+             // Calculate Target Yaw (Theta)
+             // U=0 -> 0 deg, U=1 -> 360 deg. 
+             // BUT we want to match the visual map.
+             // If I look at the texture at U, that corresponds to an angle.
+             // Direction vector D = (sin(lon)cos(lat), sin(lat), cos(lon)cos(lat)) ? Standard is -Z forward in WebGL/Three
+             // Let's rely on standard spherical mapping:
+             // u = 0.5 + arctan2(z, x) / 2pi
+             // v = 0.5 - arcsin(y) / pi
+             
+             // Inverse:
+             // Longitude (theta) = (0.5 - u) * 2pi ?? No, usually u goes 0 to 1 wrapping 360.
+             // Let's assume standard equirectangular mapping where u=0 is -180, u=0.5 is 0, u=1 is 180 (or 0->360).
+             // A-Frame <a-sky> wraps standard textures.
+             // Let's try: theta = (1 - u) * 2 * Math.PI; (Inverts X because inside sphere vs outside?)
+             // Actually, for inner sphere, typically u goes 0->1 as theta goes 0->2pi (CCW from top?)
+             
+             // Simpler approach: 
+             // Yaw: (1 - u) * 360 ... because looking out from center, texture mapping might be reversed horizontally or standard.
+             // Let's assume standard: 
+             // targetYaw = (u * 360) deg ??
+             // Let's stick to the heuristic in the plan: 
+             // theta = (1 - u) * 2 * PI  (To match standard panoramic image direction usually)
+             // Then add the offset.
+             
+             const theta = -(u * 2 * Math.PI) + Math.PI/2; // Adjust phase to align 0 with -Z? 
+             // Let's blindly trust the previous 'setRotation' logic but adapted:
+             // window.labControl.getRot(yaw, pitch) -> 
+             
+             // Let's just use Euler target for simplicity of calculation, BUT store as Quiternion for SLERP.
+             // Target Yaw (in world space, matching the skybox pixel)
+             // Skybox is rotated by -130.
+             // So if pixel is at angle A on texture, World Angle is A - 130.
+             
+             // Texture Angle (0 to 360 based on U):
+             // U=0 is usually back seam. 
+             // Let's try: texYaw = (1 - u) * 2 * Math.PI; 
+             // worldYaw = texYaw + skyRotationOffsetRad;
+             
+             // Pitch (phi):
+             // V=0 (top) -> +90 deg -> EI/2
+             // V=1 (bottom) -> -90 deg -> -PI/2
+             const worldPitch = (0.5 - v) * Math.PI;
+
+             const worldYaw = ((1 - u) * 2 * Math.PI) + skyRotationOffsetRad;
+
+             const targetQ = new THREE.Quaternion();
+             targetQ.setFromEuler(new THREE.Euler(worldPitch, worldYaw, 0, 'YXZ'));
+
+             // 3. SLERP Animation
+             const startTime = performance.now();
+
+             function animate(time) {
+                 const elapsed = time - startTime;
+                 const progress = Math.min(elapsed / duration, 1.0);
+                 
+                 // Ease In Out Cubic
+                 const ease = progress < 0.5 
+                    ? 4 * progress * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+                 
+                 const currentQ = startQ.clone().slerp(targetQ, ease);
+                 
+                 // Apply back to controls (Extract Y rotation and X rotation)
+                 const euler = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ');
+                 
+                 controls.yawObject.rotation.y = euler.y;
+                 controls.pitchObject.rotation.x = euler.x;
+
+                 if (progress < 1.0) {
+                     window.labControl.animationRef = requestAnimationFrame(animate);
+                 } else {
+                     window.labControl.animationRef = null;
+                 }
+             }
+             
+             window.labControl.animationRef = requestAnimationFrame(animate);
+          }
+      };
+
+      // --- 2. Live Agent Logic ---
+
+      btnConnect.addEventListener('click', async () => {
+        if (isConnected) {
+            disconnectAgent();
+        } else {
+            await connectAgent();
+        }
+      });
+
+      async function connectAgent() {
+        let apiKey = null;
+        
+            // 1. Fetch Ephemeral Token from Backend
+            try {
+                const tokenRes = await fetch('/token');
+                if (!tokenRes.ok) throw new Error("Failed to fetch ephemeral token");
+                const tokenData = await tokenRes.json();
+                apiKey = tokenData.token;
+                console.log("Using Ephemeral Token");
+            } catch (e) {
+                console.error("Token fetch failed, falling back to cached/prompt:", e);
+            }
+
+            // 2. Fallback: Try LocalStorage / Prompt if token fetch failed (or if you want to keep legacy support)
+            // 2. Fallback: Check for Authorized Key (from GSI)
+            if (!apiKey && window.labControl.authorizedKey) {
+                apiKey = window.labControl.authorizedKey;
+            }
+
+            if (!apiKey) {
+                 const input = prompt("Enter Google Gemini API Key (or ensure server is running):");
+                 if (input && input.trim().length > 0) {
+                    apiKey = input.trim();
+                 }
+            }
+            
+            if (!apiKey) return;
+            // Note: We don't cache ephemeral tokens in localStorage as they expire
+            if (!apiKey.startsWith('AIza')) { 
+                 // It's likely an ephemeral token or we just rely on it. 
+                 // If it was a real key entered manually, we might want to cache it.
+                 // For now, let's only cache if it looks like a standard key (optional)
+            } else {
+                 localStorage.setItem('GEMINI_API_KEY', apiKey);
+            }
+
+            btnConnect.style.opacity = '0.5'; // Loading state
+
+            try {
+                liveClient = new LiveClient(apiKey);
+            audioRecorder = new AudioRecorder();
+            audioPlayer = new AudioStreamPlayer();
+
+            // 1. Initialize Audio Output
+            await audioPlayer.initialize();
+
+            // 2. Connect generic callback with AI state feedback
+            liveClient.onAudio = (data) => {
+                audioPlayer.addPCM16(data);
+                // Show speaking state when AI is outputting audio
+                setAIState('speaking');
+            };
+
+            liveClient.onClose = () => {
+                disconnectAgent();
+            };
+
+            // Handle Interruption Signal
+            window.addEventListener('gemini-interrupted', () => {
+                if (audioPlayer) audioPlayer.clear();
+                // Return to listening state when interrupted
+                setAIState('listening');
+            });
+
+            // 3. Build System Instruction with Context
+            let objectMapContext = "";
+            if (window.labAnnotations) {
+                const W = 1024;
+                const H = 506;
+                const mapLines = window.labAnnotations.map(item => {
+                    const cx = (parseFloat(item.x) + parseFloat(item.width) / 2) / W;
+                    const cy = (parseFloat(item.y) + parseFloat(item.height) / 2) / H;
+                    return `- ${item.annotation}: x=${cx.toFixed(3)}, y=${cy.toFixed(3)}`;
+                });
+                objectMapContext = `\n\nKNOWN LOCATIONS (Use these coordinates for 'look_at' tool):\n${mapLines.join('\n')}`;
+            }
+
+            const instructions = `
+You are an intelligent AI lab assistant in the 'Network Lab'.
+You have been provided with a 360-degree equirectangular map of the environment (world.png) in your visual context.
+You can "see" the entire room.
+You have access to the user's focus of attention via system messages I will send you.
+You can also use the get_visual_context tool to take a photo of what the user is seeing and get a description. Use this when the user asks "What do I see?" or "Describe this".
+When I send "CONTEXT: User is looking at [Object Name]", you should be aware of it.
+If the object is interesting or the user dwells on it, you can offer a brief, interesting fact or description.
+Use the 'locate_object' tool to find coordinates of objects you see in the map, then use 'look_at' to guide the camera there.
+Don't be too chatty. Be helpful, concise, and professional.
+${objectMapContext}
+            `;
+
+            // 4. Connect WebSocket
+            await liveClient.connect(instructions);
+
+            // 4.5 Inject Visual Context (Map)
+            try {
+               const resp = await fetch('world.png');
+               const blob = await resp.blob();
+               const buffer = await blob.arrayBuffer();
+               const bytes = new Uint8Array(buffer);
+               let binary = '';
+               for (let i = 0; i < bytes.byteLength; i++) {
+                   binary += String.fromCharCode(bytes[i]);
+               }
+               const base64Map = btoa(binary);
+               liveClient.sendImage(base64Map);
+               console.log("Injected Map Context");
+            } catch(e) {
+               console.warn("Failed to inject map context:", e);
+            }
+
+            // 5. Start Microphone
+            await audioRecorder.start((base64PCM) => {
+                liveClient.sendAudio(base64PCM);
+            });
+
+            // Success Updates
+            isConnected = true;
+            btnConnect.style.opacity = '1';
+            iconMicOff.style.display = 'none';
+            iconMicOn.style.display = 'block';
+            
+            // Show connected status
+            showStatus('ONLINE');
+            setAIState('listening');
+            
+            // Start Gaze Loop
+            startGazeTracking();
+            
+            // Start Local Speech Logging
+            startSpeechLogger();
+
+        } catch (e) {
+            console.error("Connection failed", e);
+            alert("Failed to connect: " + e.message);
+            disconnectAgent();
+        }
+      }
+
+      function disconnectAgent() {
+        isConnected = false;
+        if (liveClient) liveClient.disconnect();
+
+        if (audioPlayer) audioPlayer.clear(); // Silence immediately
+        if (audioRecorder) audioRecorder.stop();
+        
+        liveClient = null;
+        audioRecorder = null;
+        audioPlayer = null;
+
+        btnConnect.style.opacity = '1';
+        iconMicOff.style.display = 'block';
+        iconMicOn.style.display = 'none';
+        
+        // Reset AI state and hide status
+        setAIState('idle');
+        hideStatus();
+        
+        stopGazeTracking();
+        stopSpeechLogger();
+      }
+
+      // --- 2.5 Local Speech Logging (Web Speech API) ---
+      function startSpeechLogger() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn("Speech Recognition API not supported in this browser.");
+            return;
+        }
+        
+        // Prevent duplicates
+        if (speechRecognition) stopSpeechLogger();
+
+        speechRecognition = new SpeechRecognition();
+        speechRecognition.continuous = true;
+        speechRecognition.interimResults = false;
+        speechRecognition.lang = 'en-US';
+
+        speechRecognition.onresult = (event) => {
+            if (event.results.length > 0) {
+               const transcript = event.results[event.results.length - 1][0].transcript;
+               if (transcript.trim()) {
+                 console.log("[USER]", transcript);
+                 
+                 // Forward to Agent as Context
+                 // REMOVED: Redundant with Audio Streaming (Speech-to-Speech)
+                 // if (isConnected && liveClient) {
+                 //     liveClient.sendTextContext(`CONTEXT: User said: "${transcript}"`);
+                 // }
+               }
+            }
+        };
+        
+        speechRecognition.onend = () => {
+            // Auto-restart if we are still connected
+            if (isConnected && speechRecognition) {
+                 try { speechRecognition.start(); } catch(e){}
+            }
+        };
+
+        try {
+            speechRecognition.start();
+        } catch(e) {
+            console.error("Failed to start speech logging:", e);
+        }
+      }
+
+      function stopSpeechLogger() {
+        if (speechRecognition) {
+            const recognition = speechRecognition;
+            speechRecognition = null; // Unset to prevent auto-restart in onend
+            try { recognition.stop(); } catch(e) {}
+        }
+      }
+
+      // --- 3. Gaze Tracking Logic (Enhanced for FOV) ---
+      
+      let gazeInterval = null;
+      let lastVisibleObjects = ""; // String signature of confirmed visible objects
+      
+      // Dwell Logic
+      let candidateVisible = "";
+      let candidateStartTime = 0;
+      const DWELL_MS = 2000; // 2 seconds dwell required
+
+      // FOV Configuration
+      const FOV_H_DEG = 80; 
+      const FOV_V_DEG = 60;
+
+      function startGazeTracking() {
+          if (gazeInterval) clearInterval(gazeInterval);
+          gazeInterval = setInterval(checkView, 500); // Check every 500ms for better responsiveness
+      }
+
+      function stopGazeTracking() {
+          if (gazeInterval) clearInterval(gazeInterval);
+          gazeInterval = null;
+      }
+
+      function checkView() {
+          if (!cameraEntity || !window.labAnnotations) return;
+          
+          const rotation = cameraEntity.object3D.rotation;
+          let theta = rotation.y; // Yaw
+          let phi = rotation.x;   // Pitch
+          
+          const rad2deg = 180 / Math.PI;
+          let yawDeg = (theta * rad2deg) % 360;
+          let pitchDeg = (phi * rad2deg);
+          
+          if (yawDeg < 0) yawDeg += 360;
+          
+          // Current Center UV (Similar to before)
+          // Adjust for rotation '0 -130 0'
+          let centerU = ((360 - yawDeg) - 130) % 360; 
+          if (centerU < 0) centerU += 360;
+          centerU = centerU / 360;
+          
+          let centerV = 0.5 - (Math.max(-90, Math.min(90, pitchDeg)) / 180);
+          
+          // Calculate Visible Annotations
+          // We'll define a simple box in UV space around centerU, centerV
+          // Note: This wraps around U (0-1).
+          const halfH = (FOV_H_DEG / 2) / 360; 
+          const halfV = (FOV_V_DEG / 2) / 180;
+          
+          const visible = [];
+          
+          for (const item of window.labAnnotations) {
+               // Item Center
+               const W = 1024;
+               const H = 506;
+               const annX = parseFloat(item.x) / W;
+               const annY = parseFloat(item.y) / H;
+               const annW = parseFloat(item.width) / W;
+               const annH = parseFloat(item.height) / H;
+               
+               const itemCX = annX + (annW/2);
+               const itemCY = annY + (annH/2);
+               
+               // Check Range V
+               if (Math.abs(itemCY - centerV) > halfV + (annH/2)) continue;
+               
+               // Check Range U (Handle Wrapping)
+               let diffU = Math.abs(itemCX - centerU);
+               if (diffU > 0.5) diffU = 1.0 - diffU; // Shortest path around cylinder
+               
+               if (diffU <= halfH + (annW/2)) {
+                   visible.push(item.annotation);
+               }
+          }
+          
+          // Sort for stability
+          visible.sort();
+          const signature = visible.join(", ");
+
+          // DWELL LOGIC STATE MACHINE
+          if (signature !== candidateVisible) {
+              // CHANGE DETECTED: Start timer for new candidate
+              // console.log("Gaze candidate changed:", signature);
+              candidateVisible = signature;
+              candidateStartTime = Date.now();
+          } else {
+              // NO CHANGE: Check if we have dwelled long enough
+              const elapsed = Date.now() - candidateStartTime;
+              
+              if (elapsed >= DWELL_MS && signature !== lastVisibleObjects) {
+                   // CONFIRMED!
+                   lastVisibleObjects = signature;
+                   console.log("Confirmed Gaze Focus:", signature);
+
+                   if (isConnected && liveClient && signature) {
+                        liveClient.sendTextContext(`CONTEXT: User is looking at: [${signature}]`);
+                   }
+              }
+          }
+      }
+    </script>
+
+    <!-- Hidden Accessibility Layer for AI Agents -->
+    <div id="accessibility-tree" class="visually-hidden" aria-hidden="false">
+      <section id="env-annotations" aria-labelledby="annotations-title">
+        <h2 id="annotations-title">Annotated Objects</h2>
+        <div id="annotations-list"></div>
+      </section>
+    </div>
+
+    <script>
+      // Source resolution
+      const SOURCE_WIDTH = 1024;
+      const SOURCE_HEIGHT = 506; 
+
+      // Load and inject metadata
+      async function loadMetadata() {
+        try {
+          // Load Annotations
+          const annRes = await fetch('annotations.csv');
+          if (annRes.ok) {
+            const annText = await annRes.text();
+            const annData = parseCSV(annText);
+            renderAnnotations(annData, 'annotations-list');
+            window.labAnnotations = annData; // Expose for Gaze Tracker
+          }
+
+        } catch (e) {
+          console.error("Failed to load metadata:", e);
+        }
+      }
+
+      function parseCSV(text) {
+          // ... (existing helper) ...
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) return []; // Access headers safely
+        const headers = parseLine(lines[0]);
+        
+        return lines.slice(1).map(line => {
+          const values = parseLine(line);
+          return headers.reduce((obj, header, index) => {
+            obj[header.trim()] = values[index];
+            return obj;
+          }, {});
+        });
+      }
+      
+      // ... (parseLine helper) ...
+       function parseLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      }
+      
+      // ... (renderTable helper) ...
+      function renderTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        if (!data || data.length === 0) return;
+
+        // Headers
+        const headers = Object.keys(data[0]);
+        const trHead = document.createElement('tr');
+        headers.forEach(h => {
+          const th = document.createElement('th');
+          th.innerText = h;
+          trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+
+        // Rows
+        data.forEach(item => {
+          const tr = document.createElement('tr');
+          headers.forEach(h => {
+            const td = document.createElement('td');
+            td.innerText = item[h] || '';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+        container.appendChild(table);
+      }
+
+      function renderAnnotations(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container || !data || data.length === 0) return;
+
+        const uList = document.createElement('ul');
+        
+        data.forEach(item => {
+          const x = parseFloat(item.x);
+          const y = parseFloat(item.y);
+          const w = parseFloat(item.width);
+          const h = parseFloat(item.height);
+          
+          if (isNaN(x) || isNaN(y)) return;
+
+          // Normalize to percentage for description
+          const top = (y / SOURCE_HEIGHT * 100).toFixed(2);
+          const left = (x / SOURCE_WIDTH * 100).toFixed(2);
+          const width = (w / SOURCE_WIDTH * 100).toFixed(2);
+          const height = (h / SOURCE_HEIGHT * 100).toFixed(2);
+
+          const li = document.createElement('li');
+          // Text description for AI agent
+          li.innerText = `${item.annotation}: located at position top=${top}%, left=${left}%, width=${width}%, height=${height}% of the source view.`;
+          uList.appendChild(li);
+        });
+
+        container.appendChild(uList);
+      }
+
+      // Initialize
+      loadMetadata();
+    </script>
+  </body>
+</html>
