@@ -260,6 +260,7 @@ body {
   transition: color var(--transition-fast);
   pointer-events: auto;
   text-align: left;
+  -webkit-tap-highlight-color: transparent; /* Remove blue tap highlight on mobile */
 }
 
 /* Mobile: enter link on its own line */
