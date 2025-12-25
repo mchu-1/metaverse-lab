@@ -1,0 +1,21 @@
+.DS_Store
+.env
+env.js
+
+# Dependencies
+node_modules/
+.venv/
+
+# Environment
+.pixi/*
+!.pixi/config.toml
+
+# Local Data & State
+user_data.db
+**/.wrangler/
+__pycache__/
+*.pyc
+
+# Style references
+styles/
+# dist/ - Committed for production (contains fx.js transition bundle)
