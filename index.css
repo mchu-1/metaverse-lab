@@ -725,3 +725,20 @@ body {
   pointer-events: none;
   background: transparent;
 }
+
+/* ========================================
+   A-FRAME SCENE - POST-ENTRY FULL SCREEN
+   ======================================== */
+a-scene {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important; /* Dynamic viewport height for mobile */
+}
+
+a-scene canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
