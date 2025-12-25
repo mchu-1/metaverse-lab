@@ -162,7 +162,7 @@ export function WorldTransition({
   textureUrl,
   duration = 4500,
   fadeOutDuration = 1200,
-  gridSize = 110,
+  gridSize = 150,
   onReady,
   onComplete,
 }: WorldTransitionProps) {

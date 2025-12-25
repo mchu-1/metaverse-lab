@@ -54162,7 +54162,7 @@ void main() {
   // PHASE 1: POLKA-DOT (0% - 15%)
   // Particles appear immediately as small dots
   // ========================================
-  float dotSize = 0.25; // Small initial size (25% of full)
+  float dotSize = 0.25; // Denser initial size (25% of full)
   float phase1Progress = clamp(uProgress / phase1End, 0.0, 1.0);
   float dotAlpha = smoothstep(0.0, 0.3, phase1Progress);
   
@@ -54227,7 +54227,7 @@ void main() {
   vec3 pos = vec3(basePos.x, basePos.y + yDisplacement, 0.0);
   
   // Point size based on scale and resolution
-  float baseSize = min(uResolution.x, uResolution.y) / 55.0;
+  float baseSize = min(uResolution.x, uResolution.y) / 100.0;
   gl_PointSize = baseSize * vScale;
   
   gl_Position = vec4(pos, 1.0);
@@ -54333,7 +54333,7 @@ function kC({
   textureUrl: r,
   duration: t = 4500,
   fadeOutDuration: e = 1200,
-  gridSize: n = 110,
+  gridSize: n = 150,
   onReady: i,
   onComplete: l
 }) {

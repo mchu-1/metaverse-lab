@@ -130,6 +130,14 @@ export class AudioRecorder {
       }
       const avg = sum / (debugLimit / 10);
       
+      // Update CSS custom property for voice-synced animation
+      const btnConnect = document.getElementById('btn-connect');
+      if (btnConnect) {
+        // Normalize and clamp voice activity (0-1)
+        const voiceActivity = Math.min(1, avg * 8); // Scale up for visibility
+        btnConnect.style.setProperty('--voice-activity', voiceActivity.toFixed(3));
+      }
+      
       // Log occasionally to prove mic is working
       if (!this.frameCount) this.frameCount = 0;
       this.frameCount++;
