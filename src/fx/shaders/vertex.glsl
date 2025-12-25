@@ -119,7 +119,12 @@ void main() {
   // Position
   vec2 basePos = (aGridPos - 0.5) * 2.0;
   float aspect = uResolution.x / uResolution.y;
-  basePos.x *= aspect;
+  
+  if (aspect > 1.0) {
+    basePos.y *= aspect;
+  } else {
+    basePos.x /= aspect;
+  }
   
   // Add undulation displacement during phase 2
   float yDisplacement = yWave;
