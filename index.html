@@ -27,27 +27,18 @@
       <span class="loader-text">Loading Environment</span>
     </div>
 
-    <!-- Login Overlay -->
-    <div id="login-overlay">
-      <div class="login-card">
-        <div class="login-title">Restricted Access</div>
-        <input type="email" id="login-email" class="login-input" placeholder="Email" autocomplete="email" />
-        <input type="password" id="login-password" class="login-input" placeholder="Password" autocomplete="current-password" />
-        <div id="login-error" class="login-error"></div>
-        <button id="login-btn" class="login-btn">Authenticate</button>
-      </div>
-    </div>
+    <!-- Login overlay removed - integrated into entry page -->
 
-    <!-- Welcome Overlay -->
-    <div id="welcome-overlay" class="hidden">
+    <!-- Unified Entry Page (Login integrated) -->
+    <div id="welcome-overlay">
       <div class="welcome-card">
         <h2 class="welcome-title">🌐 The Network Lab</h2>
         <p class="welcome-subtitle">
           Welcome to science <span class="gradient-text">in the cloud</span> ☁️
-          <span id="btn-enter-world" class="enter-link"
-            >enter <span class="enter-arrow">→</span></span
-          >
+          <span class="separator">·</span>
+          <span id="btn-action" class="action-link">login</span>
         </p>
+        <div id="login-error" class="login-error"></div>
       </div>
     </div>
 
@@ -171,84 +162,66 @@
       const appStartTime = Date.now();
 
       // Persist "enter" link after first hover on welcome card
-      const welcomeCard = document.querySelector(".welcome-card");
-      const enterLink = document.getElementById("btn-enter-world");
-      if (welcomeCard && enterLink) {
-        welcomeCard.addEventListener(
-          "mouseenter",
-          () => {
-            enterLink.classList.add("revealed");
-          },
-          { once: true }
-        );
-      }
+      // (Old enter button code removed - using unified action button now)
 
-      // Initialize "Enter World" Button with Voxel Wave Transition
-      const btnEnterWorld = document.getElementById("btn-enter-world");
-      if (btnEnterWorld) {
-        btnEnterWorld.addEventListener("click", async () => {
-          console.log("Entering world with voxel wave transition...");
+      // Function to trigger world transition (called after successful auth)
+      function triggerWorldTransition() {
+        console.log("Entering world with voxel wave transition...");
 
-          const welcomeOverlay = document.getElementById("welcome-overlay");
+        const welcomeOverlay = document.getElementById("welcome-overlay");
 
-          // 1. Set authorization flag early
-          window.isAuthorized = true;
-          window.isEnteringWorld = true; // Prevent welcome overlay from re-appearing
-          window.labControl.authorizedKey = GEMINI_API_KEY;
+        // 1. Set authorization flag early
+        window.isAuthorized = true;
+        window.isEnteringWorld = true;
+        window.labControl.authorizedKey = GEMINI_API_KEY;
 
-          // 2. Create and run the voxel wave transition (React Three Fiber + GSAP)
-          // NOTE: Don't hide welcome overlay yet - wait for onReady callback
-          try {
-            mountWorldTransition({
-              container: document.body,
-              textureUrl: "./world.png",
-              duration: 4500, // 4.5 seconds for main wave animation
-              fadeOutDuration: 1200, // 1.2 seconds fade to reveal world
-              gridSize: 150, // 150x150 = 22,500 particles
-              onReady: () => {
-                console.log("Transition ready, hiding welcome overlay...");
-                // NOW hide the welcome overlay - transition is ready to display
-                if (welcomeOverlay) {
-                  welcomeOverlay.style.transition = "none";
-                  welcomeOverlay.classList.remove("visible");
-                  welcomeOverlay.style.display = "none";
-                }
-              },
-              onComplete: () => {
-                console.log("Transition complete, revealing metaverse...");
+        // 2. Create and run the voxel wave transition
+        try {
+          mountWorldTransition({
+            container: document.body,
+            textureUrl: "./world.png",
+            duration: 4500,
+            fadeOutDuration: 1200,
+            gridSize: 150,
+            onReady: () => {
+              console.log("Transition ready, hiding entry page...");
+              if (welcomeOverlay) {
+                welcomeOverlay.style.transition = "none";
+                welcomeOverlay.classList.add("hidden");
+                welcomeOverlay.style.display = "none";
+              }
+            },
+            onComplete: () => {
+              console.log("Transition complete, revealing metaverse...");
 
-                // Reveal the A-Frame scene
-                const sceneEl = document.querySelector("a-scene");
-                if (sceneEl) {
-                  sceneEl.style.opacity = "1";
-                  sceneEl.style.visibility = "visible";
-                }
+              const sceneEl = document.querySelector("a-scene");
+              if (sceneEl) {
+                sceneEl.style.opacity = "1";
+                sceneEl.style.visibility = "visible";
+              }
 
-                // Mark scene as entered
-                window.isSceneLoaded = true;
-              },
-            });
-          } catch (error) {
-            console.error(
-              "Transition failed, falling back to standard entry:",
-              error
-            );
+              window.isSceneLoaded = true;
+            },
+          });
+        } catch (error) {
+          console.error(
+            "Transition failed, falling back to standard entry:",
+            error
+          );
 
-            // Fallback: hide welcome and show loading screen, enter normally
-            if (welcomeOverlay) {
-              welcomeOverlay.style.display = "none";
-            }
-            const loadingScreen = document.getElementById("loading-screen");
-            if (loadingScreen) {
-              loadingScreen.classList.remove("hidden");
-              loadingScreen.style.display = "flex";
-              loadingScreen.style.opacity = "1";
-              loadingScreen.style.visibility = "visible";
-            }
-
-            checkSceneAndEnter();
+          if (welcomeOverlay) {
+            welcomeOverlay.style.display = "none";
           }
-        });
+          const loadingScreen = document.getElementById("loading-screen");
+          if (loadingScreen) {
+            loadingScreen.classList.remove("hidden");
+            loadingScreen.style.display = "flex";
+            loadingScreen.style.opacity = "1";
+            loadingScreen.style.visibility = "visible";
+          }
+
+          checkSceneAndEnter();
+        }
       }
 
       // UI Logic
@@ -267,67 +240,56 @@
       const cameraEntity = document.querySelector("[camera]");
 
       // ========================================
-      // LOGIN LOGIC
+      // UNIFIED ACTION BUTTON (Login → Enter World)
       // ========================================
-      const loginOverlay = document.getElementById('login-overlay');
-      const loginEmail = document.getElementById('login-email');
-      const loginPass = document.getElementById('login-password');
-      const loginBtn = document.getElementById('login-btn');
+      import { loginWithGoogle, onAuthChange, getSession } from './src/auth.js';
+
+      const actionBtn = document.getElementById('btn-action');
       const loginError = document.getElementById('login-error');
 
-      async function handleLogin() {
-          const email = loginEmail.value;
-          const password = loginPass.value;
-          
-          if(!email || !password) {
-              loginError.textContent = "Please enter email and password.";
-              return;
+      // Handle Action Button Click - State-based behavior
+      if(actionBtn) {
+        actionBtn.addEventListener('click', async () => {
+          // Check current state
+          if (actionBtn.classList.contains('logged-in')) {
+            // ENTER state - trigger world transition
+            console.log("Enter clicked, entering world...");
+            triggerWorldTransition();
+          } else {
+            // LOGIN state - trigger Google Auth
+            actionBtn.textContent = "logging in...";
+            actionBtn.style.animation = "none";
+            const { error } = await loginWithGoogle();
+            if (error) {
+              actionBtn.textContent = "login";
+              if (loginError) loginError.textContent = error.message;
+            }
           }
-          
-          loginBtn.textContent = "Verifying...";
-          loginError.textContent = "";
-          
-          try {
-              const res = await fetch('/auth/verify', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify({email, password})
-              });
-              
-              if(res.ok) {
-                  const data = await res.json();
-                  loginOverlay.classList.add('hidden');
-                  
-                  // Show Welcome Overlay
-                  if(welcomeOverlay) {
-                      welcomeOverlay.classList.remove('hidden');
-                      // Wait a bit to ensure transition plays if needed, but existing CSS handles opacity well
-                      welcomeOverlay.classList.add('visible'); // If needed by existing logic
-                      // Actually existing logic uses "visible" class as well? 
-                      // Let's check: "welcomeOverlay.classList.add('visible');" is in the original code.
-                      // Yes, lines 272-274.
-                  }
-                  
-              } else {
-                  loginError.textContent = "Invalid credentials.";
-                  loginBtn.textContent = "Authenticate";
-              }
-          } catch(e) {
-              console.error(e);
-              loginError.textContent = "Connection failed.";
-              loginBtn.textContent = "Authenticate";
-          }
+        });
       }
 
-      if(loginBtn) {
-          loginBtn.addEventListener('click', handleLogin);
-      }
-      // Enter key for password
-      if(loginPass) {
-          loginPass.addEventListener('keypress', (e) => {
-              if(e.key === 'Enter') handleLogin();
-          });
-      }
+      // Auth State Listener - Updates button state
+      onAuthChange((session) => {
+        if (session) {
+          console.log("Supabase Session Active:", session.user.email);
+          
+          // Store Token for WebSocket connection
+          window.supabaseAccessToken = session.access_token;
+          
+          // Switch to ENTER state
+          if (actionBtn) {
+            actionBtn.textContent = "enter →";
+            actionBtn.classList.add('logged-in');
+          }
+
+        } else {
+          // No Session -> Show LOGIN state
+          if (actionBtn) {
+            actionBtn.textContent = "login";
+            actionBtn.classList.remove('logged-in');
+          }
+        }
+      });
 
 
       // ========================================
@@ -654,6 +616,12 @@
 
         try {
           liveClient = new LiveClient(apiKey);
+          // NEW: Inject Supabase Token for Proxy Auth
+          if (window.supabaseAccessToken) {
+            liveClient.accessToken = window.supabaseAccessToken;
+            console.log("Injecting Supabase Access Token for Proxy");
+          }
+          
           audioRecorder = new AudioRecorder();
           audioPlayer = new AudioStreamPlayer();
 

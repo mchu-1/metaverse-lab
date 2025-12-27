@@ -108,6 +108,12 @@ export class LiveClient {
       uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${this.apiKey}`;
     }
 
+    // Append Access Token (Supabase) if provided (for Proxy Auth)
+    if (this.accessToken && uri.includes('workers.dev')) {
+        const separator = uri.includes('?') ? '&' : '?';
+        uri = `${uri}${separator}auth_token=${this.accessToken}`;
+    }
+
     console.log(`[LiveClient] Connecting to: ${uri}...`); // Masked for security in logs if needed
     console.log(`[LiveClient] Model: ${this.model}`);
 

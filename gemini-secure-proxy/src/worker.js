@@ -21,36 +21,145 @@
  * - Ensure `GEMINI_API_KEY` is set in Cloudflare Secrets (`wrangler secret put GEMINI_API_KEY`).
  * - Deploy using `wrangler deploy`.
  */
+import { createClient } from '@supabase/supabase-js';
+
+/**
+ * GEMINI LIVE API SECURE PROXY (Cloudflare Worker)
+ * 
+ * Features:
+ * - Supabase Authentication (Token Verification)
+ * - Role-Based Access (Admin vs User)
+ * - 1-Hour Time Limit for Free Users
+ * - Rate Limiting (Basic IP based)
+ * - Logging
+ */
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. WebSocket Proxy (for Live API)
-    if (request.headers.get("Upgrade") === "websocket") {
-      return handleWebSocket(request, env);
-    }
-
-    // 2. Vision Proxy (for Multimodal)
-    if (url.pathname === "/vision" && request.method === "POST") {
-      return handleVision(request, env);
-    }
-    
-    // 3. CORS Preflight
+    // 1. Handle Options (CORS)
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       });
     }
 
-    return new Response("Gemini Secure Proxy Running", { status: 200 });
+    // 2. Authentication Middleware
+    // Extract Token from Query Param (WebSocket) or Header (REST)
+    let token = url.searchParams.get("auth_token");
+    if (!token && request.headers.get("Authorization")) {
+        token = request.headers.get("Authorization").replace("Bearer ", "");
+    }
+
+    if (!token) {
+        return new Response("Unauthorized: No token provided", { status: 401 });
+    }
+
+    // Initialize Supabase Admin Client
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+        return new Response("Server Misconfiguration: Missing Supabase Keys", { status: 500 });
+    }
+    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+    // Verify Token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+        return new Response("Unauthorized: Invalid Token", { status: 401 });
+    }
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || "0.0.0.0";
+    const email = user.email;
+    const adminEmails = (env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
+    const isAdmin = adminEmails.includes(email);
+
+    // 3. Access Control (Non-Admins)
+    if (!isAdmin) {
+        // A. Rate Limiting (Token Bucket via KV)
+        if (env.RATE_LIMITS) {
+            const ipKey = `rate:${clientIp}`;
+            const count = await env.RATE_LIMITS.get(ipKey, { type: "json" }) || 0;
+            if (count > 20) { // 20 requests per minute
+                 // Log Block
+                 ctx.waitUntil(logAccess(supabase, user.id, email, clientIp, "BLOCKED_RATE_LIMIT"));
+                 return new Response("Rate Limit Exceeded", { status: 429 });
+            }
+            await env.RATE_LIMITS.put(ipKey, count + 1, { expirationTtl: 60 });
+        }
+
+        // B. 1-Hour Usage Limit
+        const { data: usage, error: usageError } = await supabase
+            .from('user_usage')
+            .select('trial_start_at')
+            .eq('user_id', user.id)
+            .single();
+        
+        // Setup initial usage record if missing
+        let trialStart = usage?.trial_start_at;
+        
+        if (!usage && !usageError) {
+             // Record didn't exist? (Or single() error) - Insert
+             const now = new Date().toISOString();
+             await supabase.from('user_usage').insert({ user_id: user.id, trial_start_at: now });
+             trialStart = now;
+        } else if (!trialStart) {
+             // Existed but no start time (unlikely with default logic, but safe to handle)
+             const now = new Date().toISOString();
+             await supabase.from('user_usage').update({ trial_start_at: now }).eq('user_id', user.id);
+             trialStart = now;
+        }
+
+        // Check Expiry
+        if (trialStart) {
+            const startTime = new Date(trialStart).getTime();
+            const nowTime = Date.now();
+            const oneHour = 60 * 60 * 1000;
+            
+            if (nowTime - startTime > oneHour) {
+                ctx.waitUntil(logAccess(supabase, user.id, email, clientIp, "BLOCKED_TIME_LIMIT"));
+                return new Response("Free Trial Expired (1 Hour Limit Reached)", { status: 403 });
+            }
+        }
+    }
+
+    // Log Successful Access (Async)
+    ctx.waitUntil(logAccess(supabase, user.id, email, clientIp, url.pathname === "/vision" ? "VISION_REQUEST" : "WS_CONNECT"));
+
+
+    // 4. Route Handling
+    
+    // WebSocket Proxy (for Live API)
+    if (request.headers.get("Upgrade") === "websocket") {
+      return handleWebSocket(request, env, user);
+    }
+
+    // Vision Proxy
+    if (url.pathname === "/vision" && request.method === "POST") {
+      return handleVision(request, env);
+    }
+    
+    return new Response("Gemini Secure Proxy Running. Authenticated as " + email, { status: 200 });
   }
 };
 
-async function handleWebSocket(clientRequest, env) {
+async function logAccess(supabase, uid, email, ip, action) {
+    try {
+        await supabase.from('access_logs').insert({
+            user_id: uid,
+            email: email,
+            ip_address: ip,
+            action: action
+        });
+    } catch (e) {
+        console.error("Logging failed:", e);
+    }
+}
+
+async function handleWebSocket(clientRequest, env, user) {
   if (!env.GEMINI_API_KEY) {
     console.error("Missing GEMINI_API_KEY secret");
     return new Response("Missing GEMINI_API_KEY secret", { status: 500 });

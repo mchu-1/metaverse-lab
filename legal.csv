@@ -1,7 +1,0 @@
-form,legislation,purpose
-SSM Incorporation,Companies Act 2016 (SSM),Creates the legal entity (Sdn Bhd) required to sign the lease and hold the biosafety licenses.
-Form G (NBB/IBC/10),Biosafety Act 2007 (NBB),"Registers the Institutional Biosafety Committee (IBC). This is the ""single most critical administrative step"" without which no research notification can occur.+1"
-IBC Assessment Report (IBC/AP/20),Biosafety Guidelines (IBC),Internal validation that the lab meets PC2 specs. Must be completed before submitting Form E.+1
-Form E (NBB/N/CU/15),Biosafety Act 2007 (NBB),"Notification for ""Contained Use."" Submitting this allows the lab to legally commence work with LMOs (like HEK293T) immediately upon acknowledgement.+1"
-eSWIS Registration,Env. Quality Regulations (DOE),Registers the facility as a waste generator (Code SW 404). Mandatory before generating the first batch of biological waste.
-Certificate of Fitness (CF),Factories & Machinery Act (DOSH/JKKP),"Legalizes the autoclave. As a pressure vessel, it cannot be operated for waste sterilization without this certificate."
