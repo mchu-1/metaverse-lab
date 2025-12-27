@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Network Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="description" content="Network Lab - 360 View" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script type="module" crossorigin src="/metaverse-lab/assets/index-DbZj8kr5.js"></script>
+    <link rel="stylesheet" crossorigin href="/metaverse-lab/assets/index-2zu8DwBL.css">
+  </head>
+  <body>
+    <!-- Loading Screen -->
+    <!-- Loading Screen (Hidden by default, shown after login) -->
+    <div id="loading-screen" class="hidden">
+      <div class="loader-ring"></div>
+      <span class="loader-text">Loading Environment</span>
+    </div>
+
+    <!-- Login overlay removed - integrated into entry page -->
+
+    <!-- Unified Entry Page (Login integrated) -->
+    <div id="welcome-overlay">
+      <div class="welcome-card">
+        <h2 class="welcome-title">🌐 The Network Lab</h2>
+        <p class="welcome-subtitle">
+          Welcome to science <span class="gradient-text">in the cloud</span> ☁️
+          <span class="separator">·</span>
+          <span id="btn-action" class="action-link">login</span>
+        </p>
+        <div id="login-error" class="login-error"></div>
+      </div>
+    </div>
+
+    <!-- Status Indicator -->
+    <div id="status-indicator">
+      <div class="status-dot"></div>
+      <span class="status-text"></span>
+    </div>
+
+    <!-- 
+      vr-mode-ui="enabled: true" enables the VR button.
+      device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
+    -->
+    <a-scene
+      vr-mode-ui="enabled: true"
+      device-orientation-permission-ui="enabled: true"
+      renderer="colorManagement: true; preserveDrawingBuffer: true;"
+      embedded
+      style="opacity: 0; visibility: hidden; transition: opacity 0.5s ease"
+    >
+      <a-assets>
+        <img id="sky" src="/metaverse-lab/assets/world-DvYyR1AG.png" />
+      </a-assets>
+
+      <!-- 360 Sky Sphere -->
+      <a-sky src="#sky" rotation="0 -130 0"></a-sky>
+
+      <!-- Camera with look controls -->
+      <!-- reverseMouseDrag: true is often preferred for 360 drag interaction -->
+      <a-entity
+        camera
+        look-controls="reverseMouseDrag: true; touchEnabled: true"
+        position="0 1.6 0"
+      ></a-entity>
+    </a-scene>
+    <div id="ui-controls">
+      <!-- Connect Button with States -->
+      <button
+        id="btn-connect"
+        class="ui-btn"
+        aria-label="Connect to Laboratory Guide"
+      >
+        <svg id="icon-mic-off" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"
+          />
+          <path
+            fill="currentColor"
+            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+          />
+        </svg>
+        <svg id="icon-mic-on" viewBox="0 0 24 24" style="display: none">
+          <path
+            fill="currentColor"
+            d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.66 9 5v6c0 1.66 1.34 3 3 3z"
+          />
+          <path
+            fill="currentColor"
+            d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+          />
+        </svg>
+        <!-- Sound Wave Animation -->
+        <div class="sound-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </button>
+    </div>
+
+    <!-- Debug Console Overlay -->
+
+    <script>
+      // REMOTE LOGGER (UI Removed)
+      (function () {
+        // No visual console
+
+        function sendLog(level, args) {
+          try {
+            const msg = args
+              .map((a) =>
+                typeof a === "object" ? JSON.stringify(a) : String(a)
+              )
+              .join(" ");
+            fetch("/log", { method: "POST", body: `[${level}] ${msg}` }).catch(
+              (e) => {}
+            );
+          } catch (e) {}
+        }
+
+        function uiLog(level, args) {
+          // 1. UI Update Removed
+
+          // 2. Send Remote (Best Effort)
+          sendLog(level, args);
+        }
+
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        console.log = function (...args) {
+          originalLog.apply(console, args);
+          uiLog("INFO", args);
+        };
+        console.warn = function (...args) {
+          originalWarn.apply(console, args);
+          uiLog("WARN", args);
+        };
+        console.error = function (...args) {
+          originalError.apply(console, args);
+          uiLog("ERROR", args);
+        };
+      })();
+    </script>
+
+    <!-- Hidden Accessibility Layer for AI Agents -->
+    <div id="accessibility-tree" class="visually-hidden" aria-hidden="false">
+      <section id="env-annotations" aria-labelledby="annotations-title">
+        <h2 id="annotations-title">Annotated Objects</h2>
+        <div id="annotations-list"></div>
+      </section>
+    </div>
+
+    <script>
+      // Source resolution
+      const SOURCE_WIDTH = 1024;
+      const SOURCE_HEIGHT = 506;
+
+      // Load and inject metadata
+      async function loadMetadata() {
+        try {
+          // Load Annotations
+          const annRes = await fetch("annotations.csv");
+          if (annRes.ok) {
+            const annText = await annRes.text();
+            const annData = parseCSV(annText);
+            renderAnnotations(annData, "annotations-list");
+            window.labAnnotations = annData; // Expose for Gaze Tracker
+          }
+        } catch (e) {
+          console.error("Failed to load metadata:", e);
+        }
+      }
+
+      function parseCSV(text) {
+        // ... (existing helper) ...
+        const lines = text.trim().split("\n");
+        if (lines.length < 2) return []; // Access headers safely
+        const headers = parseLine(lines[0]);
+
+        return lines.slice(1).map((line) => {
+          const values = parseLine(line);
+          return headers.reduce((obj, header, index) => {
+            obj[header.trim()] = values[index];
+            return obj;
+          }, {});
+        });
+      }
+
+      // ... (parseLine helper) ...
+      function parseLine(line) {
+        const result = [];
+        let current = "";
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === "," && !inQuotes) {
+            result.push(current.trim());
+            current = "";
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      }
+
+      // ... (renderTable helper) ...
+      function renderTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const tbody = document.createElement("tbody");
+
+        if (!data || data.length === 0) return;
+
+        // Headers
+        const headers = Object.keys(data[0]);
+        const trHead = document.createElement("tr");
+        headers.forEach((h) => {
+          const th = document.createElement("th");
+          th.innerText = h;
+          trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+
+        // Rows
+        data.forEach((item) => {
+          const tr = document.createElement("tr");
+          headers.forEach((h) => {
+            const td = document.createElement("td");
+            td.innerText = item[h] || "";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+        container.appendChild(table);
+      }
+
+      function renderAnnotations(data, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container || !data || data.length === 0) return;
+
+        const uList = document.createElement("ul");
+
+        data.forEach((item) => {
+          const x = parseFloat(item.x);
+          const y = parseFloat(item.y);
+          const w = parseFloat(item.width);
+          const h = parseFloat(item.height);
+
+          if (isNaN(x) || isNaN(y)) return;
+
+          // Normalize to percentage for description
+          const top = ((y / SOURCE_HEIGHT) * 100).toFixed(2);
+          const left = ((x / SOURCE_WIDTH) * 100).toFixed(2);
+          const width = ((w / SOURCE_WIDTH) * 100).toFixed(2);
+          const height = ((h / SOURCE_HEIGHT) * 100).toFixed(2);
+
+          const li = document.createElement("li");
+          // Text description for AI agent
+          li.innerText = `${item.annotation}: located at position top=${top}%, left=${left}%, width=${width}%, height=${height}% of the source view.`;
+          uList.appendChild(li);
+        });
+
+        container.appendChild(uList);
+      }
+
+      // Initialize
+      loadMetadata();
+    </script>
+  </body>
+</html>
