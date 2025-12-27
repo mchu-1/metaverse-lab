@@ -27,8 +27,19 @@
       <span class="loader-text">Loading Environment</span>
     </div>
 
+    <!-- Login Overlay -->
+    <div id="login-overlay">
+      <div class="login-card">
+        <div class="login-title">Restricted Access</div>
+        <input type="email" id="login-email" class="login-input" placeholder="Email" autocomplete="email" />
+        <input type="password" id="login-password" class="login-input" placeholder="Password" autocomplete="current-password" />
+        <div id="login-error" class="login-error"></div>
+        <button id="login-btn" class="login-btn">Authenticate</button>
+      </div>
+    </div>
+
     <!-- Welcome Overlay -->
-    <div id="welcome-overlay">
+    <div id="welcome-overlay" class="hidden">
       <div class="welcome-card">
         <h2 class="welcome-title">🌐 The Network Lab</h2>
         <p class="welcome-subtitle">
@@ -256,6 +267,70 @@
       const cameraEntity = document.querySelector("[camera]");
 
       // ========================================
+      // LOGIN LOGIC
+      // ========================================
+      const loginOverlay = document.getElementById('login-overlay');
+      const loginEmail = document.getElementById('login-email');
+      const loginPass = document.getElementById('login-password');
+      const loginBtn = document.getElementById('login-btn');
+      const loginError = document.getElementById('login-error');
+
+      async function handleLogin() {
+          const email = loginEmail.value;
+          const password = loginPass.value;
+          
+          if(!email || !password) {
+              loginError.textContent = "Please enter email and password.";
+              return;
+          }
+          
+          loginBtn.textContent = "Verifying...";
+          loginError.textContent = "";
+          
+          try {
+              const res = await fetch('/auth/verify', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({email, password})
+              });
+              
+              if(res.ok) {
+                  const data = await res.json();
+                  loginOverlay.classList.add('hidden');
+                  
+                  // Show Welcome Overlay
+                  if(welcomeOverlay) {
+                      welcomeOverlay.classList.remove('hidden');
+                      // Wait a bit to ensure transition plays if needed, but existing CSS handles opacity well
+                      welcomeOverlay.classList.add('visible'); // If needed by existing logic
+                      // Actually existing logic uses "visible" class as well? 
+                      // Let's check: "welcomeOverlay.classList.add('visible');" is in the original code.
+                      // Yes, lines 272-274.
+                  }
+                  
+              } else {
+                  loginError.textContent = "Invalid credentials.";
+                  loginBtn.textContent = "Authenticate";
+              }
+          } catch(e) {
+              console.error(e);
+              loginError.textContent = "Connection failed.";
+              loginBtn.textContent = "Authenticate";
+          }
+      }
+
+      if(loginBtn) {
+          loginBtn.addEventListener('click', handleLogin);
+      }
+      // Enter key for password
+      if(loginPass) {
+          loginPass.addEventListener('keypress', (e) => {
+              if(e.key === 'Enter') handleLogin();
+          });
+      }
+
+
+      // ========================================
       // LOADING & WELCOME FLOW
       // ========================================
 
@@ -268,10 +343,16 @@
       window.isSceneLoaded = false;
       window.isEnteringWorld = false; // Flag to prevent welcome overlay from re-appearing
 
-      // Force Welcome Overlay Visible Initially (only if not already entering)
-      if (!window.isEnteringWorld) {
-        welcomeOverlay.classList.add("visible");
-      }
+      window.isEnteringWorld = false; // Flag to prevent welcome overlay from re-appearing
+
+      // Force Welcome Overlay Visible Initially (only if not already entering AND LOGIN OVERLAY IS GONE)
+      // Actually, since we added 'hidden' class to welcome overlay in HTML, we rely on Login Success to show it.
+      // So we REMOVE this block or modify it.
+      
+      // if (!window.isEnteringWorld) {
+      //   welcomeOverlay.classList.add("visible");
+      // }
+
 
       function checkSceneAndEnter() {
         if (window.isAuthorized && window.isSceneLoaded) {

@@ -51,16 +51,39 @@ API_KEY = get_api_key()
 if not API_KEY:
     print("Warning: GEMINI_API_KEY not found in env.js or environment variables.")
 
+import hashlib
+
 # Initialize SQLite Database
 def init_db():
     conn = sqlite3.connect('user_data.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS login_history
                  (email text, name text, timestamp datetime DEFAULT CURRENT_TIMESTAMP)''')
+    # Create users table if not exists (handling Auth)
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (email TEXT PRIMARY KEY, password_hash TEXT, salt TEXT)''')
     conn.commit()
     conn.close()
 
 init_db()
+
+def verify_password(email, password):
+    try:
+        conn = sqlite3.connect('user_data.db')
+        c = conn.cursor()
+        c.execute("SELECT password_hash, salt FROM users WHERE email = ?", (email,))
+        row = c.fetchone()
+        conn.close()
+        
+        if not row:
+            return False
+            
+        stored_hash, salt = row
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+        return dk.hex() == stored_hash
+    except Exception as e:
+        print(f"Auth verification error: {e}")
+        return False
 
 class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
@@ -134,6 +157,40 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[AUTH] Error: {e}")
                 self.send_error(500, f"Auth logging failed: {e}")
+
+        elif self.path == '/auth/verify':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data)
+                
+                email = data.get('email')
+                password = data.get('password')
+                
+                if not email or not password:
+                    self.send_error(400, "Missing credentials")
+                    return
+
+                if verify_password(email, password):
+                    print(f"[AUTH] SUCCESS for user: {email}")
+                    # Log the successful login
+                    conn = sqlite3.connect('user_data.db')
+                    c = conn.cursor()
+                    c.execute("INSERT INTO login_history (email, name) VALUES (?, ?)", (email, "Authorized User"))
+                    conn.commit()
+                    conn.close()
+                    
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'status': 'authorized', 'token': 'session-ok'}).encode('utf-8'))
+                else:
+                    print(f"[AUTH] FAILED for user: {email}")
+                    self.send_error(401, "Invalid credentials")
+                
+            except Exception as e:
+                print(f"[AUTH-VERIFY] Error: {e}")
+                self.send_error(500, f"Auth verification failed: {e}")
 
         else:
             self.send_error(404)
