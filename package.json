@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run build:transition && tsc && vite build",
     "build:transition": "vite build --mode lib",
     "preview": "vite preview",
     "deploy": "gh-pages -d dist",
