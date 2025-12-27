@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:transition && tsc && vite build",
+    "build": "npm run build:transition && tsc && vite build && sed -i '' 's/from \"ws\"/from \"\\/metaverse-lab\\/ws-shim.js\"/g' dist/assets/*.js",
     "build:transition": "vite build --mode lib",
     "preview": "vite preview",
     "deploy": "gh-pages -d dist",
