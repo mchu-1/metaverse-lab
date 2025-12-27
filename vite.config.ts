@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
+        'ws': resolve(__dirname, './src/shims/ws.js'),
       },
     },
     // Define process.env for browser compatibility
