@@ -114,27 +114,46 @@ if(actionBtn) {
 }
 
 // Auth State Listener - Updates button state
+// Auth State Listener - Updates button state
 onAuthChange((session) => {
   if (session) {
-    console.log("Supabase Session Active:", session.user.email);
-    
-    // Store Token for WebSocket connection
-    window.supabaseAccessToken = session.access_token;
-    
-    // Switch to ENTER state
-    if (actionBtn) {
-      actionBtn.textContent = "enter →";
-      actionBtn.classList.add('logged-in');
-    }
-
+    console.log("Supabase Session Active (Listener):", session.user.email);
+    updateUIForAuthenticatedUser(session);
   } else {
-    // No Session -> Show LOGIN state
-    if (actionBtn) {
-      actionBtn.textContent = "login";
-      actionBtn.classList.remove('logged-in');
-    }
+    updateUIForGuestUser();
   }
 });
+
+// Explicitly check session on load (to handle redirect return)
+getSession().then((session) => {
+  if (session) {
+    console.log("Supabase Session Found (Initial Check):", session.user.email);
+    updateUIForAuthenticatedUser(session);
+  }
+});
+
+function updateUIForAuthenticatedUser(session) {
+  // Store Token for WebSocket connection
+  window.supabaseAccessToken = session.access_token;
+  
+  // Switch to ENTER state
+  if (actionBtn) {
+    actionBtn.textContent = "enter →";
+    actionBtn.classList.add('logged-in');
+    
+    // Clear the hash if it exists (cleaner URL)
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+        window.history.replaceState(null, '', window.location.pathname);
+    }
+  }
+}
+
+function updateUIForGuestUser() {
+  if (actionBtn) {
+    actionBtn.textContent = "login";
+    actionBtn.classList.remove('logged-in');
+  }
+}
 
 
 // ========================================
