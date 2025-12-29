@@ -401,7 +401,12 @@ const LabScene = ({ joystickInput, keyboardState, deviceOrientation }: any) => {
     useEffect(() => {
         scene.traverse((child) => {
             if ((child as any).isMesh) {
-                (child as any).material.side = THREE.DoubleSide;
+                const material = (child as any).material;
+                material.side = THREE.DoubleSide;
+                // Make invisible but keep collision
+                material.transparent = true;
+                material.opacity = 0;
+                material.depthWrite = false; // Don't block background
             }
         });
     }, [scene]);
