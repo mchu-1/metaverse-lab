@@ -21,16 +21,16 @@ const isMobile = () => {
 export const CameraController = ({ 
   joystickInput, 
   keyboardState,
-  deviceOrientation,
-  collisionObject
+  deviceOrientation
 }: CameraControllerProps) => {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const lastOrientationRef = useRef({ alpha: 0, beta: 0 });
 
-  
   // Agent Control Refs
   const agentMoveRef = useRef({ remaining: 0 }); 
+  // Store target as { vector, active }
+  const agentLookResult = useRef<{ target: THREE.Vector3, active: boolean } | null>(null);
 
   // Register Agent Controls
   useEffect(() => {
@@ -43,34 +43,12 @@ export const CameraController = ({
         if (!controlsRef.current) return;
         
         // Convert UV to Direction
-        // Assuming standard equirectangular mapping (matching main.tsx/skybox logic)
+        const direction = new THREE.Vector3();
+        
+        // Standard Equirectangular Mapping
         // u=0.5 is center (0 deg yaw), u=0/1 is back (-180/180)
         // v=0.5 is horizon, v=0 is top (+90), v=1 is bottom (-90)
         
-        // Yaw (theta): Map u [0, 1] -> [PI, -PI] ? 
-        // Main.tsx logic: worldYaw = (1 - u) * 2 * Math.PI + offset;
-        // Let's simplify: Standard 360 map. Center (0,0, -1) starts at u=0.5?
-        // Let's assume u=0.5 -> -Z (forward), u=0 -> +Z (back)
-        
-        // const theta = (1 - u) * 2 * Math.PI - Math.PI / 2; // Shifted
-        // const phi = (0.5 - v) * Math.PI;
-        
-        // Convert Spherical to Cartesian Direction
-        // x = cos(phi) * sin(theta)
-        // y = sin(phi)
-        // z = cos(phi) * cos(theta)
-        
-        // const x = Math.cos(phi) * Math.cos(theta); // Swapped sin/cos for phase?
-        // const y = Math.sin(phi);
-        // const z = Math.cos(phi) * Math.sin(theta);
-        
-        // Actually, let's use Three.js vector helpers
-        const direction = new THREE.Vector3();
-        // UV usually: U is longitude (theta), V is latitude (phi)
-        // Start with -Z forward.
-        // Let's use the logic: u maps to 0..2PI. 
-        // We'll trust the visual feedback or standard map projection.
-        // Standard:
         const lon = (u - 0.5) * 360; // 0.5 -> 0 deg
         const lat = (v - 0.5) * -180; // 0.5 -> 0 deg
         
@@ -79,19 +57,16 @@ export const CameraController = ({
         
         direction.setFromSphericalCoords(1.0, phiRad, thetaRad);
         
-        // Apply Skybox Rotation Correction if needed (LabWorld often has -130 deg offset mentioned in main.tsx)
-        // "Skybox is rotated -130 deg around Y" -> We must rotate our look direction by -130 deg to match visual
+        // Apply Skybox Rotation Correction (-130 deg around Y)
         const skyOffset = THREE.MathUtils.degToRad(-130);
         direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), skyOffset);
         
-        // Now set target
+        // Calculate absolute target position
         // Camera stays at position, Target = Position + Direction
         const target = camera.position.clone().add(direction);
         
-        // Animate or Instant? Agent usually expects instant-ish or smooth.
-        // Let's do instant for robustness first, OrbitControls will damp if enabled.
-        controlsRef.current.target.copy(target);
-        controlsRef.current.update();
+        // Set smooth look target
+        agentLookResult.current = { target, active: true };
     };
     
     controls.move = (distance: number) => {
@@ -101,6 +76,9 @@ export const CameraController = ({
     
     controls.stop = () => {
         agentMoveRef.current.remaining = 0;
+        if (agentLookResult.current) {
+            agentLookResult.current.active = false;
+        }
     };
 
     return () => {
@@ -121,6 +99,9 @@ export const CameraController = ({
       const deltaBeta = deviceOrientation.beta - lastOrientationRef.current.beta;
       
       if (Math.abs(deltaAlpha) > 0.1 || Math.abs(deltaBeta) > 0.1) {
+        // User taking control
+        if (agentLookResult.current) agentLookResult.current.active = false;
+      
         // Get current target position
         const target = controlsRef.current.target.clone();
         const cameraPos = camera.position.clone();
@@ -205,6 +186,9 @@ export const CameraController = ({
         movementVector.addScaledVector(forward, moveZ * moveSpeed);
         movementVector.addScaledVector(right, moveX * moveSpeed);
         movementVector.y += moveY * moveSpeed;
+        
+        // User overrides agent look
+        if (agentLookResult.current) agentLookResult.current.active = false;
     }
     
     // 2. Agent Auto-Walk
@@ -224,11 +208,23 @@ export const CameraController = ({
         if (Math.abs(agentMoveRef.current.remaining) < 0.01) agentMoveRef.current.remaining = 0;
     }
     
-    
-
-    // Collision Detection and Sliding REMOVED for performance
-    // if (collisionObject && (movementVector.lengthSq() > 0)) { ... }
-
+    // 3. Agent Smooth Look-At
+    if (agentLookResult.current && agentLookResult.current.active) {
+        const currentTarget = controlsRef.current.target;
+        const desiredTarget = agentLookResult.current.target;
+        
+        const dist = currentTarget.distanceTo(desiredTarget);
+        if (dist > 0.01) {
+             // Smoothly interpolate current target to desired target
+             // Lerp factor
+             const lerpFactor = 5.0 * delta; // Adjust speed for smoothness
+             currentTarget.lerp(desiredTarget, Math.min(lerpFactor, 1.0));
+             controlsRef.current.update();
+        } else {
+            // Reached destination
+            agentLookResult.current.active = false;
+        }
+    }
 
     // Apply movement to camera and controls target
     if (movementVector.lengthSq() > 0) {
