@@ -1,2 +1,3 @@
-export default window.WebSocket;
+const WebSocket = window.WebSocket;
 export { WebSocket };
+export default WebSocket;
