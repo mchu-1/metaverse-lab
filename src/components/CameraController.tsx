@@ -27,7 +27,7 @@ export const CameraController = ({
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const lastOrientationRef = useRef({ alpha: 0, beta: 0 });
-  const raycasterRef = useRef(new THREE.Raycaster());
+
   
   // Agent Control Refs
   const agentMoveRef = useRef({ remaining: 0 }); 
@@ -225,71 +225,10 @@ export const CameraController = ({
     }
     
     
-    // Collision Detection and Sliding
-    if (collisionObject && (movementVector.lengthSq() > 0)) {
-        const raycaster = raycasterRef.current;
-        const COLLISION_RADIUS = 0.5;
-        
-        // We check purely for "walls" relative to movement direction
-        const direction = movementVector.clone().normalize();
-        const moveLength = movementVector.length();
 
-        // Check at multiple heights (Eyes and Feet)
-        const origins = [
-            camera.position.clone(), // Eyes
-            camera.position.clone().sub(new THREE.Vector3(0, 1.0, 0)) // Feet (approx)
-        ];
+    // Collision Detection and Sliding REMOVED for performance
+    // if (collisionObject && (movementVector.lengthSq() > 0)) { ... }
 
-        let collisionNormal = null;
-        let minDistance = Infinity;
-
-        for (const origin of origins) {
-             raycaster.set(origin, direction);
-             // far = check distance slightly more than move + radius to anticipate
-             raycaster.far = COLLISION_RADIUS + moveLength * 2; 
-             
-             const intersects = raycaster.intersectObject(collisionObject, true);
-             
-             if (intersects.length > 0) {
-                 const hit = intersects[0];
-                 if (hit.distance < minDistance) {
-                     minDistance = hit.distance;
-                     // Only register if within blocking range
-                     if (hit.distance < COLLISION_RADIUS) {
-                         collisionNormal = hit.face?.normal?.clone();
-                         // Ensure normal effectively points somewhat opposite to movement
-                         // (Sometimes backfaces might be hit inside?)
-                         if (collisionNormal) {
-                             const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
-                             collisionNormal.applyMatrix3(normalMatrix).normalize();
-                         }
-                     }
-                 }
-             }
-        }
-
-        if (collisionNormal) {
-            // SLIDING LOGIC
-            // Project movement vector onto the plane defined by the normal
-            // v_slide = v - (v . n) * n
-            
-            const dot = movementVector.dot(collisionNormal);
-            
-            // Only slide if we are moving INTO the wall (dot < 0)
-            if (dot < 0) {
-                // Subtract component into wall
-                const slideComponent = collisionNormal.multiplyScalar(dot);
-                movementVector.sub(slideComponent);
-                
-                // Stop agent if they hit a wall? 
-                // Useful feedback: If collision happened, clear remaining agent path
-                // to prevent "pushing" against wall forever.
-                if (Math.abs(agentMoveRef.current.remaining) > 0) {
-                    agentMoveRef.current.remaining = 0; 
-                }
-            }
-        }
-    }
 
     // Apply movement to camera and controls target
     if (movementVector.lengthSq() > 0) {
