@@ -1,5 +1,5 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Gltf } from '@react-three/drei';
 import { SparkSplat } from './SparkSplat';
 import { Joystick } from './Joystick';
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -356,8 +356,12 @@ export const LabWorld = () => {
           style={{ background: '#000000' }}
         >
           
+
           {/* LAYER 1: The Visuals (Spark Engine) */}
-          <SparkSplat src={`${import.meta.env.BASE_URL}lab.spz`} scale={1} position={[0, 0, 0]} />
+          <SparkSplat src={`${import.meta.env.BASE_URL}lab-v1.spz`} scale={1} position={[0, 0, 0]} />
+
+          {/* LAYER 2: The Environment Mesh */}
+          <Gltf src={`${import.meta.env.BASE_URL}lab-v1.glb`} scale={1} position={[0, 0, 0]} />
 
           {/* Controls: 6DOF camera movement via keyboard (WASD + Space/Shift), joystick, and device orientation */}
           <CameraController 
