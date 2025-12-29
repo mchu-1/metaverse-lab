@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { Joystick } from './Joystick';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import * as THREE from 'three';
 import { WorldVisuals } from './WorldVisuals';
 import { WorldPhysics } from './WorldPhysics';
@@ -9,7 +9,8 @@ import { useKeyboardControls } from '../hooks/useKeyboardControls';
 import { useDeviceOrientation } from '../hooks/useDeviceOrientation';
 
 export const LabWorld = () => {
-  const [joystickInput, setJoystickInput] = useState({ x: 0, y: 0 });
+  // Use Ref instead of State for high-frequency updates to prevent re-renders
+  const joystickRef = useRef({ x: 0, y: 0 });
   const [isWorldVisible, setIsWorldVisible] = useState(false);
   const keyboardState = useKeyboardControls();
   const deviceOrientation = useDeviceOrientation();
@@ -18,7 +19,8 @@ export const LabWorld = () => {
   const [collisionObject, setCollisionObject] = useState<THREE.Object3D | undefined>(undefined);
   
   const handleJoystickMove = useCallback((x: number, y: number) => {
-    setJoystickInput({ x, y });
+    // Update ref directly without triggering re-render
+    joystickRef.current = { x, y };
   }, []);
   
   const handlePhysicsLoaded = useCallback((scene: THREE.Object3D) => {
@@ -56,7 +58,9 @@ export const LabWorld = () => {
       <div id="canvas-container" style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0, zIndex: 0 }}>
         <Canvas 
           camera={{ position: [0, 1.6, 2], fov: 75 }}
-          gl={{ antialias: true, alpha: false }}
+          gl={{ antialias: false, alpha: false, preserveDrawingBuffer: false }}
+          dpr={[1, 1.5]} // Cap DPR to 1.5 for performance on high-res mobile screens
+          performance={{ min: 0.5 }} // Allow degrading quality to maintain fps
           style={{ background: '#000000' }}
         >
             {/* Visuals: The .spz splat */}
@@ -70,7 +74,7 @@ export const LabWorld = () => {
 
             {/* Agent: Navigates using inputs and collision object */}
             <CameraController 
-              joystickInput={joystickInput} 
+              joystickRef={joystickRef} 
               keyboardState={keyboardState} 
               deviceOrientation={deviceOrientation}
               collisionObject={collisionObject}

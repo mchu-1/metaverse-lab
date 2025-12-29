@@ -2,7 +2,7 @@
 import { LiveClient } from "../live-client.js";
 import { AudioRecorder, AudioStreamPlayer } from "../audio-utils.js";
 import { GEMINI_GATEWAY_URL } from "../config.js";
-import { mountWorldTransition } from "./fx/index.tsx";
+
 import { createRoot } from 'react-dom/client';
 import { LabWorld } from './components/LabWorld';
 
@@ -22,53 +22,26 @@ function triggerWorldTransition() {
   window.isEnteringWorld = true;
   window.labControl.authorizedKey = GEMINI_GATEWAY_URL;
 
-  // 2. Create and run the voxel wave transition
-  try {
-    mountWorldTransition({
-      container: document.body,
-      textureUrl: "./world.png",
-      duration: 4500,
-      fadeOutDuration: 1200,
-      gridSize: 150,
-      onReady: () => {
-        console.log("Transition ready, hiding entry page...");
-        if (welcomeOverlay) {
-          welcomeOverlay.style.transition = "none";
-          welcomeOverlay.classList.add("hidden");
-          welcomeOverlay.style.display = "none";
-        }
-      },
-      onComplete: () => {
-        console.log("Transition complete, revealing metaverse...");
-
-        const canvasContainer = document.getElementById("canvas-container");
-        if (canvasContainer) {
-          canvasContainer.style.opacity = "1";
-          canvasContainer.style.visibility = "visible";
-        }
-
-        window.isSceneLoaded = true;
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Transition failed, falling back to standard entry:",
-      error
-    );
-
-    if (welcomeOverlay) {
+  // 2. Direct Entry (Bypassing Voxel Wave due to missing asset)
+  console.log("Skipping transition, revealing metaverse...");
+  
+  if (welcomeOverlay) {
+      welcomeOverlay.style.transition = "none";
+      welcomeOverlay.classList.add("hidden");
       welcomeOverlay.style.display = "none";
-    }
-    const loadingScreen = document.getElementById("loading-screen");
-    if (loadingScreen) {
-      loadingScreen.classList.remove("hidden");
-      loadingScreen.style.display = "flex";
-      loadingScreen.style.opacity = "1";
-      loadingScreen.style.visibility = "visible";
-    }
-
-    checkSceneAndEnter();
   }
+
+  const canvasContainer = document.getElementById("canvas-container");
+  if (canvasContainer) {
+      canvasContainer.style.opacity = "1";
+      canvasContainer.style.visibility = "visible";
+  }
+
+  window.isSceneLoaded = true;
+  // Trigger onComplete logic if any additional exists
+  console.log("Entered directly.");
+
+
 }
 
 // UI Logic
@@ -534,7 +507,6 @@ async function connectAgent() {
 
     const instructions = `
 You are an intelligent AI lab assistant in the 'Network Lab'.
-You have been provided with a 360-degree equirectangular map of the environment (world.png) in your visual context.
 You can "see" the entire room.
 You have access to the user's focus of attention via system messages I will send you.
 You can also use the get_visual_context tool to take a photo of what the user is seeing and get a description. Use this when the user asks "What do I see?" or "Describe this".
@@ -549,21 +521,8 @@ ${objectMapContext}
     await liveClient.connect(instructions);
 
     // 4.5 Inject Visual Context (Map)
-    try {
-      const resp = await fetch("world.png");
-      const blob = await resp.blob();
-      const buffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Map = btoa(binary);
-      liveClient.sendImage(base64Map);
-      console.log("Injected Map Context");
-    } catch (e) {
-      console.warn("Failed to inject map context:", e);
-    }
+    // Map injection removed (world.png missing)
+    console.log("Skipping Map Context Injection");
 
     // 5. Start Microphone
     await audioRecorder.start((base64PCM) => {

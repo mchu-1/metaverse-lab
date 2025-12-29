@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, MutableRefObject } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,7 +6,7 @@ import { KeyboardState } from '../hooks/useKeyboardControls';
 import { DeviceOrientationState } from '../hooks/useDeviceOrientation';
 
 interface CameraControllerProps {
-  joystickInput: { x: number; y: number };
+  joystickRef: MutableRefObject<{ x: number; y: number }>;
   keyboardState: KeyboardState;
   deviceOrientation: DeviceOrientationState;
   collisionObject?: THREE.Object3D;
@@ -19,7 +19,7 @@ const isMobile = () => {
 
 // Camera controller that responds to joystick, keyboard, and device orientation input
 export const CameraController = ({ 
-  joystickInput, 
+  joystickRef, 
   keyboardState,
   deviceOrientation
 }: CameraControllerProps) => {
@@ -63,8 +63,9 @@ export const CameraController = ({
         direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), skyOffset);
         
         // Calculate absolute target position
-        // Camera stays at position, Target = Position + Direction
-        const target = camera.position.clone().add(direction);
+        // Camera stays at position, Target = Position + Direction * Distance
+        // We project it far away (100m) so looking direction stays stable when moving slightly
+        const target = camera.position.clone().add(direction.multiplyScalar(100));
         
         // Set smooth look target
         agentLookResult.current = { target, active: true };
@@ -86,6 +87,100 @@ export const CameraController = ({
         // Cleanup? Maybe not needed as these are global singletons effectively
         // controls.lookAtCoordinate = null;
     };
+  }, [camera]);
+
+  // Touch Look Controls (One Finger Drag)
+  useEffect(() => {
+    if (!isMobile()) return;
+
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+
+    let isDragging = false;
+    let lastTouch = { x: 0, y: 0 };
+    const rotationSpeed = 0.005; // Sensitivity
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Only process single touch that is NOT on the joystick
+      // (Joystick stops propagation usually, but we check target just in case if needed, 
+      // but usually joystick is an overlay. We just care if it bubbled to canvas)
+      if (e.touches.length === 1) {
+        isDragging = true;
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging || !controlsRef.current) return;
+      // Prevent scrolling
+      e.preventDefault(); 
+
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - lastTouch.x;
+      const deltaY = touch.clientY - lastTouch.y;
+      
+      lastTouch = { x: touch.clientX, y: touch.clientY };
+
+      if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+        // User taking control
+        if (agentLookResult.current) agentLookResult.current.active = false;
+
+        const target = controlsRef.current.target.clone();
+        const cameraPos = camera.position.clone();
+        const direction = new THREE.Vector3();
+        camera.getWorldDirection(direction);
+
+        // Yaw (Horizontal drag -> Rotate around Y)
+        if (Math.abs(deltaX) > 0.5) {
+          const yawDelta = deltaX * rotationSpeed; // Left drag = positive delta -> look left?
+          // Actually standard: Drag Left -> Look Right (Orbit). 
+          // WANTED: Drag Left -> Look Left (Egocentric/Swipe to pan camera) 
+          // OR: Drag Left -> Pull world Right -> Look Right.
+          // "Single finger drag: egocentric" usually means dragging the VIEW. 
+          // Drag Left (finger moves -X) -> Camera Rotates Left (Yaw +).
+          
+          const rotationMatrix = new THREE.Matrix4().makeRotationY(yawDelta);
+          const offset = target.clone().sub(cameraPos);
+          offset.applyMatrix4(rotationMatrix);
+          controlsRef.current.target.copy(cameraPos.clone().add(offset));
+        }
+
+        // Pitch (Vertical drag -> Rotate around Right axis)
+        if (Math.abs(deltaY) > 0.5) {
+          const pitchDelta = deltaY * rotationSpeed;
+          
+          const right = new THREE.Vector3();
+          right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+
+          const currentTarget = controlsRef.current.target.clone();
+          const offset = currentTarget.sub(cameraPos);
+          offset.applyAxisAngle(right, pitchDelta);
+
+          // Clamp
+          const newDirection = offset.clone().normalize();
+          const verticalAngle = Math.asin(newDirection.y);
+          if (Math.abs(verticalAngle) < Math.PI / 2.5) {
+            controlsRef.current.target.copy(cameraPos.clone().add(offset));
+          }
+        }
+        
+        controlsRef.current.update();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isDragging = false;
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+        canvas.removeEventListener('touchstart', handleTouchStart);
+        canvas.removeEventListener('touchmove', handleTouchMove);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+    }
   }, [camera]);
 
   useFrame((_, delta) => {
@@ -149,8 +244,9 @@ export const CameraController = ({
     }
     
     // Combine joystick and keyboard input for movement
-    let moveX = joystickInput.x;
-    let moveZ = joystickInput.y;
+    // Read directly from Ref
+    let moveX = joystickRef.current.x;
+    let moveZ = joystickRef.current.y;
     let moveY = 0;
     
     // Keyboard overrides/adds to joystick
@@ -263,7 +359,7 @@ export const CameraController = ({
         }
     }
   });
-  
+
   return (
     <OrbitControls 
       ref={controlsRef}
@@ -273,7 +369,7 @@ export const CameraController = ({
       zoomSpeed={1.2}
       target={[0, 1.6, 0]} 
       rotateSpeed={0.5}
-      enableRotate={true}
+      enableRotate={!isMobile()} // Disable Orbit rotation on mobile
     />
   );
 };

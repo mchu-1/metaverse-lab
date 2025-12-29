@@ -21,7 +21,7 @@ export function TransitionOverlay({
   
   return createPortal(
     <WorldTransition
-      textureUrl="/world.png"
+      textureUrl="" // world.png removed
       duration={4500}
       fadeOutDuration={1200}
       gridSize={110}
