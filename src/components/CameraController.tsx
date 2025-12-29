@@ -171,9 +171,9 @@ export const CameraController = ({
     // ----------------------------------------
     
     // Physics constants
-    const MAX_SPEED = 0.08; // Reduced speed
+    const MAX_SPEED = 0.04; // Reduced speed
     const ACCELERATION = 2.0 * delta; // Adjust acceleration feel
-    const FRICTION = 0.90; // Inertia/Gliding
+    const FRICTION = 0.0; // Inertia/Gliding - 0.0 for instant stop
     
     // Get camera's forward and right vectors (ignore Y for horizontal movement)
     const forward = new THREE.Vector3();
