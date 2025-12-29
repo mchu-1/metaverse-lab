@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -29,6 +29,86 @@ export const CameraController = ({
   const lastOrientationRef = useRef({ alpha: 0, beta: 0 });
   const raycasterRef = useRef(new THREE.Raycaster());
   
+  // Agent Control Refs
+  const agentMoveRef = useRef({ remaining: 0 }); 
+
+  // Register Agent Controls
+  useEffect(() => {
+    // We attach to window.labControl (assumed initialized in main.tsx or we create it)
+    if (!(window as any).labControl) (window as any).labControl = {};
+    
+    const controls = (window as any).labControl;
+    
+    controls.lookAtCoordinate = (u: number, v: number) => {
+        if (!controlsRef.current) return;
+        
+        // Convert UV to Direction
+        // Assuming standard equirectangular mapping (matching main.tsx/skybox logic)
+        // u=0.5 is center (0 deg yaw), u=0/1 is back (-180/180)
+        // v=0.5 is horizon, v=0 is top (+90), v=1 is bottom (-90)
+        
+        // Yaw (theta): Map u [0, 1] -> [PI, -PI] ? 
+        // Main.tsx logic: worldYaw = (1 - u) * 2 * Math.PI + offset;
+        // Let's simplify: Standard 360 map. Center (0,0, -1) starts at u=0.5?
+        // Let's assume u=0.5 -> -Z (forward), u=0 -> +Z (back)
+        
+        // const theta = (1 - u) * 2 * Math.PI - Math.PI / 2; // Shifted
+        // const phi = (0.5 - v) * Math.PI;
+        
+        // Convert Spherical to Cartesian Direction
+        // x = cos(phi) * sin(theta)
+        // y = sin(phi)
+        // z = cos(phi) * cos(theta)
+        
+        // const x = Math.cos(phi) * Math.cos(theta); // Swapped sin/cos for phase?
+        // const y = Math.sin(phi);
+        // const z = Math.cos(phi) * Math.sin(theta);
+        
+        // Actually, let's use Three.js vector helpers
+        const direction = new THREE.Vector3();
+        // UV usually: U is longitude (theta), V is latitude (phi)
+        // Start with -Z forward.
+        // Let's use the logic: u maps to 0..2PI. 
+        // We'll trust the visual feedback or standard map projection.
+        // Standard:
+        const lon = (u - 0.5) * 360; // 0.5 -> 0 deg
+        const lat = (v - 0.5) * -180; // 0.5 -> 0 deg
+        
+        const phiRad = THREE.MathUtils.degToRad(90 - lat); // Theta in physics (top down)
+        const thetaRad = THREE.MathUtils.degToRad(lon); // Phi in physics
+        
+        direction.setFromSphericalCoords(1.0, phiRad, thetaRad);
+        
+        // Apply Skybox Rotation Correction if needed (LabWorld often has -130 deg offset mentioned in main.tsx)
+        // "Skybox is rotated -130 deg around Y" -> We must rotate our look direction by -130 deg to match visual
+        const skyOffset = THREE.MathUtils.degToRad(-130);
+        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), skyOffset);
+        
+        // Now set target
+        // Camera stays at position, Target = Position + Direction
+        const target = camera.position.clone().add(direction);
+        
+        // Animate or Instant? Agent usually expects instant-ish or smooth.
+        // Let's do instant for robustness first, OrbitControls will damp if enabled.
+        controlsRef.current.target.copy(target);
+        controlsRef.current.update();
+    };
+    
+    controls.move = (distance: number) => {
+        console.log("Agent moved command:", distance);
+        agentMoveRef.current.remaining = distance;
+    };
+    
+    controls.stop = () => {
+        agentMoveRef.current.remaining = 0;
+    };
+
+    return () => {
+        // Cleanup? Maybe not needed as these are global singletons effectively
+        // controls.lookAtCoordinate = null;
+    };
+  }, [camera]);
+
   useFrame((_, delta) => {
     if (!controlsRef.current) return;
     
@@ -104,9 +184,9 @@ export const CameraController = ({
     moveZ = Math.max(-1, Math.min(1, moveZ));
     moveY = Math.max(-1, Math.min(1, moveY));
     
-    if (moveX === 0 && moveZ === 0 && moveY === 0) return;
-    
-    // Movement speed
+    // ----------------------------------------
+    // MOVEMENT CALCULATION (User + Agent)
+    // ----------------------------------------
     const moveSpeed = 2.5 * delta;
     
     // Get camera's forward and right vectors (ignore Y for horizontal movement)
@@ -118,12 +198,32 @@ export const CameraController = ({
     const right = new THREE.Vector3();
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
     
-    // Calculate movement
-    // Calculate desired movement
     const movementVector = new THREE.Vector3();
-    movementVector.addScaledVector(forward, moveZ * moveSpeed);
-    movementVector.addScaledVector(right, moveX * moveSpeed);
-    movementVector.y += moveY * moveSpeed; // Vertical movement
+    
+    // 1. User Input
+    if (moveX !== 0 || moveZ !== 0 || moveY !== 0) {
+        movementVector.addScaledVector(forward, moveZ * moveSpeed);
+        movementVector.addScaledVector(right, moveX * moveSpeed);
+        movementVector.y += moveY * moveSpeed;
+    }
+    
+    // 2. Agent Auto-Walk
+    if (Math.abs(agentMoveRef.current.remaining) > 0.01) {
+        // Determine step size for this frame
+        const step = Math.min(Math.abs(agentMoveRef.current.remaining), moveSpeed);
+        const sign = Math.sign(agentMoveRef.current.remaining);
+        const vectorStep = step * sign;
+        
+        // Add to movement (Forward/Backward)
+        movementVector.addScaledVector(forward, vectorStep);
+        
+        // Decrement remaining distance
+        agentMoveRef.current.remaining -= vectorStep;
+        
+        // Snap to 0 if close
+        if (Math.abs(agentMoveRef.current.remaining) < 0.01) agentMoveRef.current.remaining = 0;
+    }
+    
     
     // Collision Detection and Sliding
     if (collisionObject && (movementVector.lengthSq() > 0)) {
@@ -181,16 +281,22 @@ export const CameraController = ({
                 const slideComponent = collisionNormal.multiplyScalar(dot);
                 movementVector.sub(slideComponent);
                 
-                // Optional: Push out slightly to prevent getting stuck inside?
-                // For now, sliding removes the 'into' component.
+                // Stop agent if they hit a wall? 
+                // Useful feedback: If collision happened, clear remaining agent path
+                // to prevent "pushing" against wall forever.
+                if (Math.abs(agentMoveRef.current.remaining) > 0) {
+                    agentMoveRef.current.remaining = 0; 
+                }
             }
         }
     }
 
     // Apply movement to camera and controls target
-    camera.position.add(movementVector);
-    controlsRef.current.target.add(movementVector);
-    controlsRef.current.update();
+    if (movementVector.lengthSq() > 0) {
+        camera.position.add(movementVector);
+        controlsRef.current.target.add(movementVector);
+        controlsRef.current.update();
+    }
   });
   
   return (

@@ -64,7 +64,7 @@ export const LabWorld = () => {
 
             {/* Physics: The .glb mesh (invisible) */}
             <WorldPhysics 
-                src={`${baseUrl}lab-v1.glb`} 
+                src={`${baseUrl}lab-v1-small.glb`} 
                 onLoaded={handlePhysicsLoaded}
             />
 

@@ -83,6 +83,21 @@ export class LiveClient {
                   "Resets the camera view to the default starting position.",
                 parameters: { type: "OBJECT", properties: {} },
               },
+              {
+                name: "move",
+                description:
+                  "Moves the agent forward or backward by a specific distance in meters.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    distance: {
+                      type: "NUMBER",
+                      description: "Distance to move in meters. Positive for forward, negative for backward.",
+                    },
+                  },
+                  required: ["distance"],
+                },
+              },
             ],
           },
         ],
@@ -227,6 +242,9 @@ export class LiveClient {
             result = { result: "ok" };
           } else if (name === "reset_view") {
             window.labControl.reset();
+            result = { result: "ok" };
+          } else if (name === "move") {
+            window.labControl.move(args.distance);
             result = { result: "ok" };
           } else if (name === "locate_object") {
             const coords = await this.locateObject(args.query);
