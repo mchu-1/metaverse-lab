@@ -3,6 +3,8 @@ import { LiveClient } from "../live-client.js";
 import { AudioRecorder, AudioStreamPlayer } from "../audio-utils.js";
 import { GEMINI_GATEWAY_URL } from "../config.js";
 import { mountWorldTransition } from "./fx/index.tsx";
+import { createRoot } from 'react-dom/client';
+import { LabWorld } from './components/LabWorld';
 
 const appStartTime = Date.now();
 
@@ -39,10 +41,10 @@ function triggerWorldTransition() {
       onComplete: () => {
         console.log("Transition complete, revealing metaverse...");
 
-        const sceneEl = document.querySelector("a-scene");
-        if (sceneEl) {
-          sceneEl.style.opacity = "1";
-          sceneEl.style.visibility = "visible";
+        const canvasContainer = document.getElementById("canvas-container");
+        if (canvasContainer) {
+          canvasContainer.style.opacity = "1";
+          canvasContainer.style.visibility = "visible";
         }
 
         window.isSceneLoaded = true;
@@ -81,8 +83,8 @@ const welcomeOverlay = document.getElementById("welcome-overlay");
 const statusIndicator = document.getElementById("status-indicator");
 const loadingScreen = document.getElementById("loading-screen");
 
-const scene = document.querySelector("a-scene");
-const cameraEntity = document.querySelector("[camera]");
+const scene = null; // A-Frame removed
+const cameraEntity = null; // A-Frame removed
 
 // ========================================
 // UNIFIED ACTION BUTTON (Login → Enter World)
@@ -190,12 +192,12 @@ function enterMetaverse() {
   console.log("Entering Metaverse...");
 
   const loadingScreen = document.getElementById("loading-screen");
-  const sceneEl = document.querySelector("a-scene");
+  const canvasContainer = document.getElementById("canvas-container");
 
   // Reveal the scene (was hidden to prevent flash)
-  if (sceneEl) {
-    sceneEl.style.opacity = "1";
-    sceneEl.style.visibility = "visible";
+  if (canvasContainer) {
+    canvasContainer.style.opacity = "1";
+    canvasContainer.style.visibility = "visible";
   }
 
   // Fade out loading screen after brief delay
@@ -222,14 +224,17 @@ const loadTimeout = setTimeout(() => {
 }, 4000);
 
 // Show welcome overlay when scene is ready
-if (scene.hasLoaded) {
-  clearTimeout(loadTimeout);
-  onSceneReady();
-} else {
-  scene.addEventListener("loaded", () => {
-    clearTimeout(loadTimeout);
-    onSceneReady();
-  });
+// Mount React App
+const rootEl = document.getElementById('root');
+if (rootEl) {
+  const root = createRoot(rootEl);
+  root.render(<LabWorld />);
+  
+  // Simulate Scene Ready for Logic (Splats load progressively)
+  setTimeout(() => {
+     console.log("3D World Mounted & 'Ready'");
+     onSceneReady();
+  }, 100);
 }
 
 // Handle Enter button - REMOVED (Auto-enter on login)
@@ -410,8 +415,8 @@ window.labControl = {
       // Apply back to controls (Extract Y rotation and X rotation)
       const euler = new THREE.Euler().setFromQuaternion(currentQ, "YXZ");
 
-      controls.yawObject.rotation.y = euler.y;
-      controls.pitchObject.rotation.x = euler.x;
+      // controls.yawObject.rotation.y = euler.y;
+      // controls.pitchObject.rotation.x = euler.x;
 
       if (progress < 1.0) {
         window.labControl.animationRef = requestAnimationFrame(animate);

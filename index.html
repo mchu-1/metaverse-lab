@@ -16,11 +16,13 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <link rel="stylesheet" href="index.css" />
-    <!-- Three.js is included in A-Frame, removing explicit import to avoid duplicates -->
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script> -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- Three.js is included in R3F, removing explicit import -->
+    <!-- <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script> -->
   </head>
   <body>
+    <!-- React Root for 3D World -->
+    <div id="root"></div>
+
     <!-- Loading Screen -->
     <!-- Loading Screen (Hidden by default, shown after login) -->
     <div id="loading-screen" class="hidden">
@@ -49,32 +51,8 @@
       <span class="status-text"></span>
     </div>
 
-    <!-- 
-      vr-mode-ui="enabled: true" enables the VR button.
-      device-orientation-permission-ui handles iOS 13+ permission request automatically (in recent A-Frame versions).
-    -->
-    <a-scene
-      vr-mode-ui="enabled: true"
-      device-orientation-permission-ui="enabled: true"
-      renderer="colorManagement: true;"
-      embedded
-      style="opacity: 0; visibility: hidden; transition: opacity 0.5s ease"
-    >
-      <a-assets>
-        <img id="sky" src="world.png" />
-      </a-assets>
+    <!-- Canvas Container (Will be managed by React) -->
 
-      <!-- 360 Sky Sphere -->
-      <a-sky src="#sky" rotation="0 -130 0"></a-sky>
-
-      <!-- Camera with look controls -->
-      <!-- reverseMouseDrag: true is often preferred for 360 drag interaction -->
-      <a-entity
-        camera
-        look-controls="reverseMouseDrag: true; touchEnabled: true"
-        position="0 1.6 0"
-      ></a-entity>
-    </a-scene>
     <div id="ui-controls">
       <!-- Connect Button with States -->
       <button
