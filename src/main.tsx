@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { LiveClient } from "../live-client.js";
 import { AudioRecorder, AudioStreamPlayer } from "../audio-utils.js";
-import { GEMINI_API_KEY } from "../config.js";
+import { GEMINI_GATEWAY_URL } from "../config.js";
 import { mountWorldTransition } from "./fx/index.tsx";
 
 const appStartTime = Date.now();
@@ -18,7 +18,7 @@ function triggerWorldTransition() {
   // 1. Set authorization flag early
   window.isAuthorized = true;
   window.isEnteringWorld = true;
-  window.labControl.authorizedKey = GEMINI_API_KEY;
+  window.labControl.authorizedKey = GEMINI_GATEWAY_URL;
 
   // 2. Create and run the voxel wave transition
   try {
