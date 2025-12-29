@@ -168,7 +168,7 @@ export const CameraController = ({
     // ----------------------------------------
     // MOVEMENT CALCULATION (User + Agent)
     // ----------------------------------------
-    const moveSpeed = 2.5 * delta;
+    const moveSpeed = 0.8 * delta;
     
     // Get camera's forward and right vectors (ignore Y for horizontal movement)
     const forward = new THREE.Vector3();
