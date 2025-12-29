@@ -1,5 +1,5 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Gltf } from '@react-three/drei';
+import { OrbitControls, useGLTF } from '@react-three/drei';
 import { SparkSplat } from './SparkSplat';
 import { Joystick } from './Joystick';
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -188,15 +188,18 @@ const isMobile = () => {
 const CameraController = ({ 
   joystickInput, 
   keyboardState,
-  deviceOrientation
+  deviceOrientation,
+  collisionObject
 }: { 
   joystickInput: { x: number; y: number };
   keyboardState: KeyboardState;
   deviceOrientation: DeviceOrientationState;
+  collisionObject?: THREE.Object3D;
 }) => {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const lastOrientationRef = useRef({ alpha: 0, beta: 0 });
+  const raycasterRef = useRef(new THREE.Raycaster());
   
   useFrame((_, delta) => {
     if (!controlsRef.current) return;
@@ -288,14 +291,91 @@ const CameraController = ({
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
     
     // Calculate movement
-    const movement = new THREE.Vector3();
-    movement.addScaledVector(forward, moveZ * moveSpeed);
-    movement.addScaledVector(right, moveX * moveSpeed);
-    movement.y += moveY * moveSpeed; // Vertical movement
+    // Calculate desired movement
+    const movementVector = new THREE.Vector3();
+    movementVector.addScaledVector(forward, moveZ * moveSpeed);
+    movementVector.addScaledVector(right, moveX * moveSpeed);
+    movementVector.y += moveY * moveSpeed; // Vertical movement
     
+    // Collision Detection and Sliding
+    if (collisionObject && (movementVector.lengthSq() > 0)) {
+        const raycaster = raycasterRef.current;
+        const COLLISION_RADIUS = 0.5;
+        
+        // We check purely for "walls" relative to movement direction
+        const direction = movementVector.clone().normalize();
+        const moveLength = movementVector.length();
+
+        // Check at multiple heights (Eyes and Feet)
+        const origins = [
+            camera.position.clone(), // Eyes
+            camera.position.clone().sub(new THREE.Vector3(0, 1.0, 0)) // Feet (approx)
+        ];
+
+        let collisionNormal = null;
+        let minDistance = Infinity;
+
+        for (const origin of origins) {
+             raycaster.set(origin, direction);
+             // far = check distance slightly more than move + radius to anticipate
+             raycaster.far = COLLISION_RADIUS + moveLength * 2; 
+             
+             const intersects = raycaster.intersectObject(collisionObject, true);
+             
+             if (intersects.length > 0) {
+                 const hit = intersects[0];
+                 if (hit.distance < minDistance) {
+                     minDistance = hit.distance;
+                     // Only register if within blocking range
+                     if (hit.distance < COLLISION_RADIUS) {
+                         collisionNormal = hit.face?.normal?.clone();
+                         // Ensure normal effectively points somewhat opposite to movement
+                         // (Sometimes backfaces might be hit inside?)
+                         if (collisionNormal) {
+                             // Transform normal to world space if object is rotated? 
+                             // Local normal is returned by Three.js raycaster usually... wait.
+                             // intersectObject returns world point but face.normal is LOCAL?
+                             // Actually three.js docs say face.normal is in object space?
+                             // Standard practice: hit.face.normal.clone().applyQuaternion(hit.object.quaternion) 
+                             // Wait, intersectObject computes intersection... let's check docs or be safe.
+                             // Actually standard raycaster `face` normal is model space. We need world normal.
+                             // Quick fix: Just use the vector from hit point to camera? No, that's not the normal.
+                             // Let's assume the scene is static and world aligned? No.
+                             // We should transform it.
+                             
+                             // Better: Compute normal from face? 
+                             // Usually applyNormalMatrix?
+                             
+                             const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                             collisionNormal.applyMatrix3(normalMatrix).normalize();
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (collisionNormal) {
+            // SLIDING LOGIC
+            // Project movement vector onto the plane defined by the normal
+            // v_slide = v - (v . n) * n
+            
+            const dot = movementVector.dot(collisionNormal);
+            
+            // Only slide if we are moving INTO the wall (dot < 0)
+            if (dot < 0) {
+                // Subtract component into wall
+                const slideComponent = collisionNormal.multiplyScalar(dot);
+                movementVector.sub(slideComponent);
+                
+                // Optional: Push out slightly to prevent getting stuck inside?
+                // For now, sliding removes the 'into' component.
+            }
+        }
+    }
+
     // Apply movement to camera and controls target
-    camera.position.add(movement);
-    controlsRef.current.target.add(movement);
+    camera.position.add(movementVector);
+    controlsRef.current.target.add(movementVector);
     controlsRef.current.update();
   });
   
@@ -311,6 +391,43 @@ const CameraController = ({
       enableRotate={!deviceOrientation.enabled || !isMobile()} // Disable drag-rotate when using device orientation
     />
   );
+};
+
+const LabScene = ({ joystickInput, keyboardState, deviceOrientation }: any) => {
+    // Load the GLTF to get access to the scene for collision
+    const { scene } = useGLTF(`${import.meta.env.BASE_URL}lab-v1.glb`);
+    
+    // Ensure collision mesh is double-sided so we can't walk through backfaces
+    useEffect(() => {
+        scene.traverse((child) => {
+            if ((child as any).isMesh) {
+                (child as any).material.side = THREE.DoubleSide;
+            }
+        });
+    }, [scene]);
+    
+    return (
+        <>
+           {/* LAYER 1: The Visuals (Spark Engine) */}
+           <SparkSplat src={`${import.meta.env.BASE_URL}lab-v1.spz`} scale={1} position={[0, 0, 0]} />
+
+           {/* LAYER 2: The Environment Mesh */}
+           {/* We use primitive to render the preloaded scene */}
+           <primitive object={scene} scale={1} position={[0, 0, 0]} />
+
+           {/* Controls: 6DOF camera movement via keyboard, joystick, and device orientation */}
+           <CameraController 
+             joystickInput={joystickInput} 
+             keyboardState={keyboardState} 
+             deviceOrientation={deviceOrientation}
+             collisionObject={scene}
+           />
+           
+           {/* Lighting for any future mesh additions */}
+           <ambientLight intensity={1} />
+           <directionalLight position={[5, 10, 5]} intensity={1} />
+        </>
+    );
 };
 
 export const LabWorld = () => {
@@ -355,24 +472,11 @@ export const LabWorld = () => {
           gl={{ antialias: true, alpha: false }}
           style={{ background: '#000000' }}
         >
-          
-
-          {/* LAYER 1: The Visuals (Spark Engine) */}
-          <SparkSplat src={`${import.meta.env.BASE_URL}lab-v1.spz`} scale={1} position={[0, 0, 0]} />
-
-          {/* LAYER 2: The Environment Mesh */}
-          <Gltf src={`${import.meta.env.BASE_URL}lab-v1.glb`} scale={1} position={[0, 0, 0]} />
-
-          {/* Controls: 6DOF camera movement via keyboard (WASD + Space/Shift), joystick, and device orientation */}
-          <CameraController 
-            joystickInput={joystickInput} 
-            keyboardState={keyboardState} 
-            deviceOrientation={deviceOrientation}
+          <LabScene 
+             joystickInput={joystickInput}
+             keyboardState={keyboardState}
+             deviceOrientation={deviceOrientation}
           />
-          
-          {/* Lighting for any future mesh additions */}
-          <ambientLight intensity={1} />
-          <directionalLight position={[5, 10, 5]} intensity={1} />
         </Canvas>
       </div>
       

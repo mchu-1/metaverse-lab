@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       open: false,
+      host: true, // Listen on all local IPs
     },
   };
 });
