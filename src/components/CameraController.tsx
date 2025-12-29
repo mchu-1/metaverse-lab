@@ -26,6 +26,7 @@ export const CameraController = ({
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   const lastOrientationRef = useRef({ alpha: 0, beta: 0 });
+  const velocity = useRef(new THREE.Vector3(0, 0, 0));
 
   // Agent Control Refs
   const agentMoveRef = useRef({ remaining: 0 }); 
@@ -168,7 +169,11 @@ export const CameraController = ({
     // ----------------------------------------
     // MOVEMENT CALCULATION (User + Agent)
     // ----------------------------------------
-    const moveSpeed = 0.8 * delta;
+    
+    // Physics constants
+    const MAX_SPEED = 0.08; // Reduced speed
+    const ACCELERATION = 2.0 * delta; // Adjust acceleration feel
+    const FRICTION = 0.90; // Inertia/Gliding
     
     // Get camera's forward and right vectors (ignore Y for horizontal movement)
     const forward = new THREE.Vector3();
@@ -179,58 +184,83 @@ export const CameraController = ({
     const right = new THREE.Vector3();
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
     
-    const movementVector = new THREE.Vector3();
+    const inputVector = new THREE.Vector3();
     
-    // 1. User Input
+    // 1. User Input (Joystick + Keyboard)
     if (moveX !== 0 || moveZ !== 0 || moveY !== 0) {
-        movementVector.addScaledVector(forward, moveZ * moveSpeed);
-        movementVector.addScaledVector(right, moveX * moveSpeed);
-        movementVector.y += moveY * moveSpeed;
+        inputVector.addScaledVector(forward, moveZ);
+        inputVector.addScaledVector(right, moveX);
+        inputVector.y += moveY;
+        
+        // Normalize input to prevent faster diagonal movement
+        if (inputVector.lengthSq() > 1) inputVector.normalize();
         
         // User overrides agent look
         if (agentLookResult.current) agentLookResult.current.active = false;
     }
     
-    // 2. Agent Auto-Walk
+    // 2. Agent Auto-Walk inputs (Add to input vector)
     if (Math.abs(agentMoveRef.current.remaining) > 0.01) {
-        // Determine step size for this frame
-        const step = Math.min(Math.abs(agentMoveRef.current.remaining), moveSpeed);
         const sign = Math.sign(agentMoveRef.current.remaining);
-        const vectorStep = step * sign;
+        inputVector.addScaledVector(forward, sign);
         
-        // Add to movement (Forward/Backward)
-        movementVector.addScaledVector(forward, vectorStep);
+        // Decrement logic handles actual distance, but physics handles the movement
+        // We'll just simulate "pushing" the stick forward/backward while remaining distance exists
+        // const step = Math.abs(velocity.current.z) * delta; // approximate distance covered (unused)
+
+        // This is a bit complex to mix with physics, let's keep it simple: 
+        // If agent wants to move, we apply input force in that direction until distance is 0.
         
-        // Decrement remaining distance
-        agentMoveRef.current.remaining -= vectorStep;
+        // Actually, let's just decrement remaining distance by the speed we *actually* move at the end.
+    }
+
+    // Apply Acceleration
+    if (inputVector.lengthSq() > 0) {
+        // Accelerate towards input direction
+        velocity.current.add(inputVector.multiplyScalar(ACCELERATION));
         
-        // Snap to 0 if close
-        if (Math.abs(agentMoveRef.current.remaining) < 0.01) agentMoveRef.current.remaining = 0;
+        // Clamp to Max Speed
+        if (velocity.current.length() > MAX_SPEED) {
+             velocity.current.clampLength(0, MAX_SPEED);
+        }
+    } else {
+        // Decelerate (Friction) when no input
+        velocity.current.multiplyScalar(FRICTION);
     }
     
-    // 3. Agent Smooth Look-At
+    // Stop completely if very slow
+    if (velocity.current.lengthSq() < 0.000001) {
+        velocity.current.set(0, 0, 0);
+    }
+    
+    // 3. Agent Smooth Look-At (Independent of movement physics)
     if (agentLookResult.current && agentLookResult.current.active) {
         const currentTarget = controlsRef.current.target;
         const desiredTarget = agentLookResult.current.target;
         
         const dist = currentTarget.distanceTo(desiredTarget);
         if (dist > 0.01) {
-             // Smoothly interpolate current target to desired target
-             // Lerp factor
-             const lerpFactor = 5.0 * delta; // Adjust speed for smoothness
+             const lerpFactor = 5.0 * delta; 
              currentTarget.lerp(desiredTarget, Math.min(lerpFactor, 1.0));
              controlsRef.current.update();
         } else {
-            // Reached destination
             agentLookResult.current.active = false;
         }
     }
 
     // Apply movement to camera and controls target
-    if (movementVector.lengthSq() > 0) {
-        camera.position.add(movementVector);
-        controlsRef.current.target.add(movementVector);
+    if (velocity.current.lengthSq() > 0) {
+        camera.position.add(velocity.current);
+        controlsRef.current.target.add(velocity.current);
         controlsRef.current.update();
+        
+        // Update agent remaining distance if moving
+        if (Math.abs(agentMoveRef.current.remaining) > 0) {
+             // Project velocity onto forward vector to see how much we moved 'forward'
+             const moveDist = velocity.current.clone().projectOnVector(forward).length();
+             agentMoveRef.current.remaining -= Math.sign(agentMoveRef.current.remaining) * moveDist;
+             if (Math.abs(agentMoveRef.current.remaining) < 0.1) agentMoveRef.current.remaining = 0;
+        }
     }
   });
   
